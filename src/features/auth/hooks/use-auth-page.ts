@@ -11,9 +11,12 @@ type AuthFormState = {
   password: string
 }
 
+type AuthView = 'login' | 'sign-up'
+
 export const useAuthPage = () => {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [authView, setAuthView] = useState<AuthView>('login')
   const [formState, setFormState] = useState<AuthFormState>({
     displayName: '',
     email: '',
@@ -182,9 +185,18 @@ export const useAuthPage = () => {
     }
   }
 
+  const showLogIn = () => {
+    setAuthView('login')
+  }
+
+  const showSignUp = () => {
+    setAuthView('sign-up')
+  }
+
   return {
     user,
     profile,
+    authView,
     loading,
     error,
     message,
@@ -195,5 +207,7 @@ export const useAuthPage = () => {
     handleSignIn,
     handleSignUp,
     handleSignOut,
+    showLogIn,
+    showSignUp,
   }
 }
