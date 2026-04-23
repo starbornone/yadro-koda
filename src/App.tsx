@@ -79,8 +79,10 @@ function App() {
       [
         'providers',
         profile?.providers?.join(', ') ||
-          (Array.isArray(user?.app_metadata?.providers) ? user.app_metadata.providers.join(', ') : '-') ||
-          '-',
+        (Array.isArray(user?.app_metadata?.providers)
+          ? user.app_metadata.providers.join(', ')
+          : '-') ||
+        '-',
       ],
       ['provider type', profile?.provider ?? user?.app_metadata?.provider ?? '-'],
       [

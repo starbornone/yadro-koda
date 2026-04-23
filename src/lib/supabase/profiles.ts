@@ -1,27 +1,30 @@
-import type { User } from '@supabase/supabase-js';
-import { supabase } from './supabase';
+import type { User } from '@supabase/supabase-js'
+import { supabase } from './supabase'
 
 export type Profile = {
-  id: string;
-  display_name: string | null;
-  email: string | null;
-  phone: string | null;
-  provider: string | null;
-  providers: string[] | null;
-  created_at: string;
-  updated_at: string;
-  last_sign_in_at: string | null;
-};
+  id: string
+  display_name: string | null
+  email: string | null
+  phone: string | null
+  provider: string | null
+  providers: string[] | null
+  created_at: string
+  updated_at: string
+  last_sign_in_at: string | null
+}
 
 const normalizeProviders = (providers: unknown): string[] => {
   if (!Array.isArray(providers)) {
-    return [];
+    return []
   }
 
-  return providers.filter((provider): provider is string => typeof provider === 'string');
-};
+  return providers.filter((provider): provider is string => typeof provider === 'string')
+}
 
-export const profileFromUser = (user: User, displayNameOverride?: string): Omit<Profile, 'updated_at'> => ({
+export const profileFromUser = (
+  user: User,
+  displayNameOverride?: string,
+): Omit<Profile, 'updated_at'> => ({
   id: user.id,
   display_name: displayNameOverride?.trim() || user.user_metadata?.display_name || null,
   email: user.email ?? null,
@@ -30,17 +33,19 @@ export const profileFromUser = (user: User, displayNameOverride?: string): Omit<
   providers: normalizeProviders(user.app_metadata?.providers),
   created_at: user.created_at,
   last_sign_in_at: user.last_sign_in_at ?? null,
-});
+})
 
 export const upsertProfileFromUser = async (user: User, displayNameOverride?: string) => {
-  return supabase.from('profiles').upsert(profileFromUser(user, displayNameOverride), { onConflict: 'id' });
-};
+  return supabase
+    .from('profiles')
+    .upsert(profileFromUser(user, displayNameOverride), { onConflict: 'id' })
+}
 
 export const getMyProfile = async (): Promise<Profile | null> => {
-  const { data, error } = await supabase.from('profiles').select('*').maybeSingle();
+  const { data, error } = await supabase.from('profiles').select('*').maybeSingle()
   if (error) {
-    throw error;
+    throw error
   }
 
-  return data;
-};
+  return data
+}
