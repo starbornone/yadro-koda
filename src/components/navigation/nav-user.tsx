@@ -1,5 +1,7 @@
 'use client'
 
+import { useCallback, useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -24,6 +26,7 @@ import {
   BellIcon,
   LogOutIcon,
 } from 'lucide-react'
+import { supabase } from '@/lib/supabase/supabase'
 
 export function NavUser({
   user,
@@ -35,6 +38,25 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
+  const navigate = useNavigate()
+  const [isSigningOut, setIsSigningOut] = useState(false)
+  const [signOutError, setSignOutError] = useState<string | null>(null)
+
+  const handleSignOut = useCallback(async () => {
+    if (isSigningOut) return
+
+    setSignOutError(null)
+    setIsSigningOut(true)
+
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      setSignOutError(error.message)
+      setIsSigningOut(false)
+      return
+    }
+
+    await navigate({ to: '/' })
+  }, [isSigningOut, navigate])
 
   return (
     <SidebarMenu>
@@ -97,9 +119,14 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            {signOutError ? (
+              <DropdownMenuLabel className="px-2 py-1 text-xs text-destructive">
+                {signOutError}
+              </DropdownMenuLabel>
+            ) : null}
+            <DropdownMenuItem onClick={() => void handleSignOut()} disabled={isSigningOut}>
               <LogOutIcon />
-              Log out
+              {isSigningOut ? 'Signing out...' : 'Log out'}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
