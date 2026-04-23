@@ -33,6 +33,15 @@ const dashboardRoute = createRoute({
 const profileRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/profile',
+  beforeLoad: async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    if (!session?.user) {
+      throw redirect({ to: '/' })
+    }
+  },
   component: ProfilePage,
 })
 
