@@ -15,13 +15,7 @@ import {
 } from '@/components/ui/sidebar'
 import { PlusIcon } from 'lucide-react'
 
-// This is sample data.
 const data = {
-  user: {
-    name: 'shadcn',
-    email: 'm@example.com',
-    avatar: '/avatars/shadcn.jpg',
-  },
   calendars: [
     {
       name: 'My Calendars',
@@ -38,11 +32,19 @@ const data = {
   ],
 }
 
-export function SidebarRight({ ...props }: React.ComponentProps<typeof Sidebar>) {
+type SidebarRightProps = React.ComponentProps<typeof Sidebar> & {
+  user: {
+    name: string
+    email: string
+    avatar: string
+  }
+}
+
+export function SidebarRight({ user, ...props }: SidebarRightProps) {
   return (
     <Sidebar collapsible="none" className="sticky top-0 hidden h-svh border-l lg:flex" {...props}>
       <SidebarHeader className="h-16 border-b border-sidebar-border">
-        <NavUser user={data.user} />
+        <NavUser user={user} />
       </SidebarHeader>
       <SidebarContent>
         <DatePicker />

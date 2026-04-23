@@ -28,6 +28,27 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/supabase'
 
+const getAvatarFallback = (displayName: string, email: string) => {
+  const nameParts = displayName
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+
+  if (nameParts.length > 0) {
+    const initials = nameParts
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? '')
+      .join('')
+
+    if (initials) {
+      return initials
+    }
+  }
+
+  const emailFirstLetter = email.trim()[0]?.toUpperCase()
+  return emailFirstLetter || '?'
+}
+
 export function NavUser({
   user,
 }: {
@@ -41,6 +62,7 @@ export function NavUser({
   const navigate = useNavigate()
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [signOutError, setSignOutError] = useState<string | null>(null)
+  const avatarFallback = getAvatarFallback(user.name, user.email)
 
   const handleSignOut = useCallback(async () => {
     if (isSigningOut) return
@@ -69,7 +91,7 @@ export function NavUser({
             >
               <Avatar className="h-8 w-8 rounded-lg">
                 <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                <AvatarFallback className="rounded-lg">{avatarFallback}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
@@ -88,7 +110,7 @@ export function NavUser({
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                  <AvatarFallback className="rounded-lg">{avatarFallback}</AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>
