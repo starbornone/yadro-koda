@@ -49,3 +49,28 @@ export const getMyProfile = async (): Promise<Profile | null> => {
 
   return data
 }
+
+export type UpdateMyProfileInput = {
+  display_name?: string | null
+  phone?: string | null
+}
+
+export const updateMyProfile = async (updates: UpdateMyProfileInput): Promise<Profile | null> => {
+  const payload: UpdateMyProfileInput = {}
+
+  if (Object.hasOwn(updates, 'display_name')) {
+    payload.display_name = updates.display_name?.trim() || null
+  }
+
+  if (Object.hasOwn(updates, 'phone')) {
+    payload.phone = updates.phone?.trim() || null
+  }
+
+  const { data, error } = await supabase.from('profiles').update(payload).select('*').maybeSingle()
+
+  if (error) {
+    throw error
+  }
+
+  return data
+}
