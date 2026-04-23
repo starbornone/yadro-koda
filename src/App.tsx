@@ -1,7 +1,7 @@
-import { AuthPage } from '@/pages/auth-page'
+import { Outlet } from '@tanstack/react-router'
 
 function App() {
-  return <AuthPage />
+  return <Outlet />
 }
 
 export default App
