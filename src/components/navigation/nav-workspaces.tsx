@@ -18,10 +18,8 @@ export function NavWorkspaces({
 }: {
   workspaces: {
     name: string
-    emoji: React.ReactNode
     pages: {
       name: string
-      emoji: React.ReactNode
     }[]
   }[]
 }) {
@@ -35,7 +33,6 @@ export function NavWorkspaces({
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <a href="#">
-                    <span>{workspace.emoji}</span>
                     <span>{workspace.name}</span>
                   </a>
                 </SidebarMenuButton>
@@ -56,7 +53,6 @@ export function NavWorkspaces({
                       <SidebarMenuSubItem key={page.name}>
                         <SidebarMenuSubButton asChild>
                           <a href="#">
-                            <span>{page.emoji}</span>
                             <span>{page.name}</span>
                           </a>
                         </SidebarMenuSubButton>
