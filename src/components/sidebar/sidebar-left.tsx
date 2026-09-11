@@ -1,5 +1,3 @@
-'use client'
-
 import * as React from 'react'
 
 import { NavFavorites } from '@/components/navigation/nav-favorites'
