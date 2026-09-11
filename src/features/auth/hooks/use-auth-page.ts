@@ -1,8 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { FormEvent } from 'react'
-import type { Session } from '@supabase/supabase-js'
-import type { Profile } from '@/lib/supabase/profiles'
-import { getMyProfile, upsertProfileFromUser } from '@/lib/supabase/profiles'
 import { supabase } from '@/lib/supabase/supabase'
 
 type AuthFormState = {
@@ -13,9 +10,9 @@ type AuthFormState = {
 
 type AuthView = 'login' | 'sign-up'
 
+// Session state lives in `authStore`; this hook only owns the form. On a successful sign-in the
+// store emits, the router re-runs the `/` guard, and that redirects to the destination.
 export const useAuthPage = () => {
-  const [session, setSession] = useState<Session | null>(null)
-  const [profile, setProfile] = useState<Profile | null>(null)
   const [authView, setAuthView] = useState<AuthView>('login')
   const [formState, setFormState] = useState<AuthFormState>({
     displayName: '',
@@ -25,61 +22,6 @@ export const useAuthPage = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
-
-  useEffect(() => {
-    let active = true
-
-    const loadProfile = async () => {
-      try {
-        const nextProfile = await getMyProfile()
-        if (active) {
-          setProfile(nextProfile)
-        }
-      } catch (loadError) {
-        if (active && loadError instanceof Error) {
-          setError(loadError.message)
-        }
-      }
-    }
-
-    const syncProfile = async (nextSession: Session | null) => {
-      setSession(nextSession)
-      if (!nextSession?.user) {
-        setProfile(null)
-        return
-      }
-
-      const { error: upsertError } = await upsertProfileFromUser(nextSession.user)
-      if (upsertError && active) {
-        setError(upsertError.message)
-        return
-      }
-
-      await loadProfile()
-    }
-
-    const loadSession = async () => {
-      const {
-        data: { session: currentSession },
-      } = await supabase.auth.getSession()
-      await syncProfile(currentSession)
-    }
-
-    void loadSession()
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      void syncProfile(nextSession)
-    })
-
-    return () => {
-      active = false
-      subscription.unsubscribe()
-    }
-  }, [])
-
-  const user = session?.user ?? null
 
   const resetFeedback = () => {
     setError(null)
@@ -122,13 +64,16 @@ export const useAuthPage = () => {
     }
   }
 
-  const handleSignUp = async () => {
+  const handleSignUp = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
     if (loading) return
 
     resetFeedback()
     setLoading(true)
 
     try {
+      // `display_name` lands in `auth.users.raw_user_meta_data`; the `on_auth_user_created`
+      // trigger copies it into `profiles`.
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: formState.email.trim(),
         password: formState.password,
@@ -142,17 +87,6 @@ export const useAuthPage = () => {
       if (signUpError) {
         setError(signUpError.message)
         return
-      }
-
-      if (data.user) {
-        const { error: profileError } = await upsertProfileFromUser(
-          data.user,
-          formState.displayName,
-        )
-        if (profileError) {
-          setError(profileError.message)
-          return
-        }
       }
 
       if (data.user && !data.session) {
@@ -175,8 +109,6 @@ export const useAuthPage = () => {
   }
 
   return {
-    user,
-    profile,
     authView,
     loading,
     error,
