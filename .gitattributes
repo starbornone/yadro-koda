@@ -1,0 +1,3 @@
+# Normalise line endings to LF in the repo and on checkout, regardless of core.autocrlf.
+# Prettier enforces LF, so this keeps `pnpm format:check` honest on Windows.
+* text=auto eol=lf
