@@ -1,13 +1,14 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { RouterProvider, createMemoryHistory } from '@tanstack/react-router'
+import { Outlet, RouterProvider, createMemoryHistory } from '@tanstack/react-router'
 import type { Session } from '@supabase/supabase-js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AuthState } from '@/lib/auth/auth-store'
 import { syncRouterWithAuth } from '@/lib/auth/sync-router-with-auth'
 import { createAppRouter } from './router'
 
-// Pages are stubbed: these tests are about guards, redirects and the loader, not the UI.
+// Pages and the shell are stubbed: these tests are about guards, redirects and the loader.
+vi.mock('@/components/layout/app-shell', () => ({ AppShell: () => <Outlet /> }))
 vi.mock('./pages/auth-page', () => ({ AuthPage: () => <div>auth page</div> }))
 vi.mock('./pages/dashboard-page', () => ({ DashboardPage: () => <div>dashboard page</div> }))
 vi.mock('./pages/profile-page', () => ({ ProfilePage: () => <div>profile page</div> }))

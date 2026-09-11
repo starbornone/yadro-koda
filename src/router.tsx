@@ -56,13 +56,14 @@ const authenticatedRoute = createRoute({
   loader: async ({ context }) => ({
     profile: await getMyProfile(context.user.id),
   }),
+  component: lazyRouteComponent(() => import('@/components/layout/app-shell'), 'AppShell'),
   // Profile only changes through this app; refetch on explicit `router.invalidate()`, not on
   // every navigation.
   staleTime: Infinity,
 })
 
-// The landing page stays in the main chunk; everything behind the guard is split out so a
-// signed-out visitor never downloads the dashboard.
+// The landing page stays in the main chunk; everything behind the guard (including the shell
+// above) is split out so a signed-out visitor never downloads the dashboard.
 const dashboardRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: '/dashboard',
