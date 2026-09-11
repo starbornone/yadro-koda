@@ -1,4 +1,10 @@
-import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router'
+import {
+  createRootRoute,
+  createRoute,
+  createRouter,
+  redirect,
+  type RouterHistory,
+} from '@tanstack/react-router'
 import App from './App'
 import { authStore } from '@/lib/auth/auth-store'
 import { getMyProfile } from '@/lib/supabase/profiles'
@@ -72,7 +78,11 @@ const routeTree = rootRoute.addChildren([
   authenticatedRoute.addChildren([dashboardRoute, profileRoute]),
 ])
 
-export const router = createRouter({ routeTree })
+// Factory so tests can build a router on a memory history; the app uses the default instance.
+export const createAppRouter = (options: { history?: RouterHistory } = {}) =>
+  createRouter({ routeTree, history: options.history })
+
+export const router = createAppRouter()
 
 declare module '@tanstack/react-router' {
   interface Register {
