@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useRouter } from '@tanstack/react-router'
+import { usePasswordUpdate } from '@/features/auth/hooks/use-password-update'
 import { useSignOut } from '@/features/auth/hooks/use-sign-out'
 import { authenticatedRoute } from '@/lib/auth/authenticated-route'
 import { updateMyProfile, type Profile } from '@/lib/supabase/profiles'
@@ -24,6 +25,7 @@ export const useProfilePage = () => {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const { signOut, isSigningOut, error: signOutError } = useSignOut()
+  const passwordForm = usePasswordUpdate()
 
   const saved = formFromProfile(profile)
   const isDirty = form.displayName.trim() !== saved.displayName || form.phone.trim() !== saved.phone
@@ -75,6 +77,7 @@ export const useProfilePage = () => {
     setDisplayName,
     setPhone,
     handleSave,
+    passwordForm,
     signOut,
     isSigningOut,
     signOutError,
