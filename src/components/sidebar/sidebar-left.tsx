@@ -1,7 +1,7 @@
 import * as React from 'react'
 
 import { NavFavorites } from '@/components/navigation/nav-favorites'
-import { NavMain } from '@/components/navigation/nav-main'
+import { NavMain, type NavMainItem } from '@/components/navigation/nav-main'
 import { NavSecondary } from '@/components/navigation/nav-secondary'
 import { NavWorkspaces } from '@/components/navigation/nav-workspaces'
 import { TeamSwitcher } from '@/components/navigation/team-switcher'
@@ -28,27 +28,22 @@ const data = {
   navMain: [
     {
       title: 'Search',
-      url: '#',
       icon: <SearchIcon />,
     },
     {
       title: 'Ask AI',
-      url: '#',
       icon: <SparklesIcon />,
     },
     {
       title: 'Home',
-      url: '#',
       icon: <HomeIcon />,
-      isActive: true,
+      to: '/dashboard',
     },
     {
       title: 'Inbox',
-      url: '#',
       icon: <InboxIcon />,
-      badge: '10',
     },
-  ],
+  ] satisfies NavMainItem[],
   navSecondary: [
     {
       title: 'Calendar',
