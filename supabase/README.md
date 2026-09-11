@@ -27,6 +27,18 @@ supabase db pull
 Then compare the generated migration against ours and apply only the differences (typically:
 the RLS policies, the column-level `grant update`, and the three triggers).
 
+## Auth settings (dashboard)
+
+The password-reset flow needs one thing that lives outside migrations:
+
+- **Authentication → URL Configuration → Redirect URLs** must include the reset page for every
+  environment, e.g. `http://localhost:5173/reset-password` and
+  `https://<your-domain>/reset-password`. The app passes this as `redirectTo` when requesting a
+  reset; Supabase refuses redirect targets that are not on the list and falls back to the Site
+  URL. (The app still recovers — a recovery session landing on `/` is redirected to
+  `/reset-password` — but the allow-list is the correct fix.)
+- The default **Reset Password** email template (`{{ .ConfirmationURL }}`) works as-is.
+
 ## Later
 
 - `supabase gen types typescript --linked > src/lib/supabase/database.types.ts` and pass the
