@@ -1,11 +1,20 @@
 import { useSyncExternalStore } from 'react'
-import type { Session, User } from '@supabase/supabase-js'
+import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase/supabase'
 
 export type AuthState =
   | { status: 'loading'; session: null; user: null }
   | { status: 'signed-out'; session: null; user: null }
-  | { status: 'signed-in'; session: Session; user: User }
+  | {
+      status: 'signed-in'
+      session: Session
+      user: User
+      /**
+       * True after arriving via a password-reset link, until `updateUser` succeeds. Routes use it
+       * to keep the user on `/reset-password`. In-memory only: a fresh page load starts false.
+       */
+      passwordRecovery: boolean
+    }
 
 const LOADING: AuthState = { status: 'loading', session: null, user: null }
 const SIGNED_OUT: AuthState = { status: 'signed-out', session: null, user: null }
@@ -14,15 +23,30 @@ let state: AuthState = LOADING
 let readyPromise: Promise<void> | null = null
 const listeners = new Set<() => void>()
 
-const setSession = (session: Session | null) => {
-  const next: AuthState = session
-    ? { status: 'signed-in', session, user: session.user }
-    : SIGNED_OUT
+const isSameState = (a: AuthState, b: AuthState) =>
+  a.status === b.status &&
+  a.session?.access_token === b.session?.access_token &&
+  (a.status !== 'signed-in' ||
+    b.status !== 'signed-in' ||
+    a.passwordRecovery === b.passwordRecovery)
+
+const handleAuthEvent = (event: AuthChangeEvent, session: Session | null) => {
+  let next: AuthState
+
+  if (!session) {
+    next = SIGNED_OUT
+  } else {
+    const passwordRecovery =
+      event === 'PASSWORD_RECOVERY'
+        ? true
+        : event === 'USER_UPDATED'
+          ? false
+          : state.status === 'signed-in' && state.passwordRecovery
+    next = { status: 'signed-in', session, user: session.user, passwordRecovery }
+  }
 
   // Supabase re-emits SIGNED_IN on tab focus with an unchanged session; skip the no-op.
-  if (next.status === state.status && next.session?.access_token === state.session?.access_token) {
-    return
-  }
+  if (isSameState(state, next)) return
 
   state = next
   for (const listener of listeners) listener()
@@ -50,7 +74,7 @@ export const authStore = {
       supabase.auth.onAuthStateChange((event, session) => {
         // Keep this callback synchronous: supabase-js holds its auth lock while notifying
         // subscribers, so awaiting another Supabase call in here can deadlock.
-        setSession(session)
+        handleAuthEvent(event, session)
         if (event === 'INITIAL_SESSION') resolve()
       })
     })

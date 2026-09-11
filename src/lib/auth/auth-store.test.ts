@@ -69,6 +69,7 @@ describe('authStore', () => {
       status: 'signed-in',
       session: persisted,
       user: persisted.user,
+      passwordRecovery: false,
     })
   })
 
@@ -109,6 +110,41 @@ describe('authStore', () => {
 
     expect(listener).toHaveBeenCalledTimes(2)
     expect(store.authStore.getSnapshot().session?.access_token).toBe('token-2')
+  })
+
+  it('enters password recovery on PASSWORD_RECOVERY and leaves it on USER_UPDATED', () => {
+    const listener = vi.fn()
+    store.authStore.subscribe(listener)
+    void store.authStore.ready()
+    emit('INITIAL_SESSION', session('token-1'))
+    listener.mockClear()
+
+    // Same token as INITIAL_SESSION, but the recovery flag makes it a real change.
+    emit('PASSWORD_RECOVERY', session('token-1'))
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(store.authStore.getSnapshot()).toMatchObject({
+      status: 'signed-in',
+      passwordRecovery: true,
+    })
+
+    emit('TOKEN_REFRESHED', session('token-2'))
+    expect(store.authStore.getSnapshot()).toMatchObject({ passwordRecovery: true })
+
+    emit('USER_UPDATED', session('token-2'))
+    expect(listener).toHaveBeenCalledTimes(3)
+    expect(store.authStore.getSnapshot()).toMatchObject({ passwordRecovery: false })
+  })
+
+  it('drops recovery on sign-out', () => {
+    void store.authStore.ready()
+    emit('INITIAL_SESSION', null)
+    emit('PASSWORD_RECOVERY', session('token-1'))
+    emit('SIGNED_OUT', null)
+
+    expect(store.authStore.getSnapshot().status).toBe('signed-out')
+
+    emit('SIGNED_IN', session('token-2'))
+    expect(store.authStore.getSnapshot()).toMatchObject({ passwordRecovery: false })
   })
 
   it('stops notifying after unsubscribe', () => {
