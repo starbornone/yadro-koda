@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js'
-import { supabase } from '@/lib/supabase/supabase'
+import { isSupabaseConfigured, supabase } from '@/lib/supabase/supabase'
 
 export type AuthState =
   | { status: 'loading'; session: null; user: null }
@@ -68,9 +68,19 @@ export const authStore = {
     return state
   },
 
-  /** Resolves once the persisted session (if any) has been restored. Idempotent. */
+  /**
+   * Resolves once the persisted session (if any) has been restored. Idempotent. Without a
+   * configured Supabase project there is nothing to restore: the store reports signed-out so
+   * public pages still render.
+   */
   ready(): Promise<void> {
     readyPromise ??= new Promise<void>((resolve) => {
+      if (!isSupabaseConfigured) {
+        handleAuthEvent('INITIAL_SESSION', null)
+        resolve()
+        return
+      }
+
       supabase.auth.onAuthStateChange((event, session) => {
         // Keep this callback synchronous: supabase-js holds its auth lock while notifying
         // subscribers, so awaiting another Supabase call in here can deadlock.

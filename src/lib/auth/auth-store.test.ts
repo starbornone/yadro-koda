@@ -15,7 +15,12 @@ const fakeAuth = vi.hoisted(() => {
   }
 })
 
+const config = vi.hoisted(() => ({ isSupabaseConfigured: true }))
+
 vi.mock('@/lib/supabase/supabase', () => ({
+  get isSupabaseConfigured() {
+    return config.isSupabaseConfigured
+  },
   supabase: { auth: { onAuthStateChange: fakeAuth.onAuthStateChange } },
 }))
 
@@ -31,6 +36,7 @@ const loadStore = async () => {
   vi.resetModules()
   fakeAuth.callbacks.length = 0
   fakeAuth.onAuthStateChange.mockClear()
+  config.isSupabaseConfigured = true
   return import('./auth-store')
 }
 
@@ -157,6 +163,18 @@ describe('authStore', () => {
     emit('SIGNED_IN', session('token-1'))
 
     expect(listener).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('without a configured Supabase project', () => {
+  it('ready() resolves as signed-out without touching the client', async () => {
+    const store = await loadStore()
+    config.isSupabaseConfigured = false
+
+    await store.authStore.ready()
+
+    expect(store.authStore.getSnapshot().status).toBe('signed-out')
+    expect(fakeAuth.onAuthStateChange).not.toHaveBeenCalled()
   })
 })
 
