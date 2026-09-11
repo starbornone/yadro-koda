@@ -12,6 +12,7 @@ type AuthLogInFormProps = Omit<React.ComponentProps<'form'>, 'onSubmit'> & {
   onPasswordChange: (password: string) => void
   onSignIn: FormEventHandler<HTMLFormElement>
   onShowSignUp: () => void
+  onShowForgotPassword: () => void
 }
 
 export function AuthLogInForm({
@@ -23,6 +24,7 @@ export function AuthLogInForm({
   onPasswordChange,
   onSignIn,
   onShowSignUp,
+  onShowForgotPassword,
   ...props
 }: AuthLogInFormProps) {
   return (
@@ -49,7 +51,14 @@ export function AuthLogInForm({
         <Field>
           <div className="flex items-center">
             <FieldLabel htmlFor="password">Password</FieldLabel>
-            <a href="#" className="ml-auto text-sm underline-offset-4 hover:underline">
+            <a
+              href="#"
+              className="ml-auto text-sm underline-offset-4 hover:underline"
+              onClick={(event) => {
+                event.preventDefault()
+                onShowForgotPassword()
+              }}
+            >
               Forgot your password?
             </a>
           </div>
