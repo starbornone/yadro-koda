@@ -8,6 +8,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
+import { ThemeToggle } from '@/components/theme/theme-toggle'
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 
@@ -17,7 +18,7 @@ export type Crumb = {
   to?: LinkProps['to']
 }
 
-/** Sticky page header for routes inside the app shell: sidebar toggle plus breadcrumbs. */
+/** Sticky page header for routes inside the app shell: sidebar toggle, breadcrumbs, theme. */
 export function PageHeader({ crumbs }: { crumbs: Crumb[] }) {
   return (
     <header className="sticky top-0 flex h-14 shrink-0 items-center gap-2 bg-background">
@@ -45,6 +46,9 @@ export function PageHeader({ crumbs }: { crumbs: Crumb[] }) {
             })}
           </BreadcrumbList>
         </Breadcrumb>
+        <div className="ml-auto">
+          <ThemeToggle />
+        </div>
       </div>
     </header>
   )
