@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react'
-import { useNavigate } from '@tanstack/react-router'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -47,11 +46,12 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
-  const navigate = useNavigate()
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [signOutError, setSignOutError] = useState<string | null>(null)
   const avatarFallback = getAvatarFallback(user.name, user.email)
 
+  // No navigation here: the auth store emits SIGNED_OUT, the router re-runs the
+  // `_authenticated` guard, and that redirects to `/`.
   const handleSignOut = useCallback(async () => {
     if (isSigningOut) return
 
@@ -62,11 +62,8 @@ export function NavUser({
     if (error) {
       setSignOutError(error.message)
       setIsSigningOut(false)
-      return
     }
-
-    await navigate({ to: '/' })
-  }, [isSigningOut, navigate])
+  }, [isSigningOut])
 
   return (
     <SidebarMenu>
