@@ -1,7 +1,12 @@
-import { Outlet } from '@tanstack/react-router'
+import { HeadContent, Outlet } from '@tanstack/react-router'
 
 function App() {
-  return <Outlet />
+  return (
+    <>
+      <HeadContent />
+      <Outlet />
+    </>
+  )
 }
 
 export default App
