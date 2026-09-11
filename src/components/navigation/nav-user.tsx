@@ -1,5 +1,3 @@
-'use client'
-
 import { useCallback, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -18,21 +16,11 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
-import {
-  ChevronsUpDownIcon,
-  SparklesIcon,
-  BadgeCheckIcon,
-  CreditCardIcon,
-  BellIcon,
-  LogOutIcon,
-} from 'lucide-react'
+import { ChevronsUpDownIcon, BadgeCheckIcon, LogOutIcon } from 'lucide-react'
 import { supabase } from '@/lib/supabase/supabase'
 
 const getAvatarFallback = (displayName: string, email: string) => {
-  const nameParts = displayName
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
+  const nameParts = displayName.trim().split(/\s+/).filter(Boolean)
 
   if (nameParts.length > 0) {
     const initials = nameParts
