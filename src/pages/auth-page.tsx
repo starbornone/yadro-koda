@@ -3,9 +3,10 @@ import { AuthForgotPasswordForm } from '@/features/auth/components/auth-forgot-p
 import { AuthLayout } from '@/features/auth/components/auth-layout'
 import { AuthLogInForm } from '@/features/auth/components/auth-log-in-form'
 import { AuthSignUpForm } from '@/features/auth/components/auth-sign-up-form'
-import { useAuthPage } from '@/features/auth/hooks/use-auth-page'
+import { useAuthPage, type AuthView } from '@/features/auth/hooks/use-auth-page'
 
-export const AuthPage = () => {
+/** Login, sign-up and forgot-password share one screen; the route picks the starting view. */
+export const AuthPage = ({ initialView = 'login' }: { initialView?: AuthView }) => {
   const {
     authView,
     loading,
@@ -21,7 +22,7 @@ export const AuthPage = () => {
     showLogIn,
     showSignUp,
     showForgotPassword,
-  } = useAuthPage()
+  } = useAuthPage(initialView)
 
   return (
     <>
@@ -64,3 +65,5 @@ export const AuthPage = () => {
     </>
   )
 }
+
+export const SignUpPage = () => <AuthPage initialView="sign-up" />

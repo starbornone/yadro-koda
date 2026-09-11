@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AuthPage } from './auth-page'
+import { renderWithRouter } from '@/test/render-with-router'
+import { AuthPage, SignUpPage } from './auth-page'
 
 const auth = vi.hoisted(() => ({
   signInWithPassword: vi.fn(),
@@ -20,7 +21,7 @@ beforeEach(() => {
 describe('AuthPage', () => {
   it('shows the login form by default and can switch to sign-up and back', async () => {
     const user = userEvent.setup()
-    render(<AuthPage />)
+    await renderWithRouter(<AuthPage />)
 
     expect(screen.getByRole('heading', { name: 'Login to your account' })).toBeInTheDocument()
 
@@ -31,10 +32,16 @@ describe('AuthPage', () => {
     expect(screen.getByRole('heading', { name: 'Login to your account' })).toBeInTheDocument()
   })
 
+  it('starts on sign-up when rendered as the sign-up page', async () => {
+    await renderWithRouter(<SignUpPage />)
+
+    expect(screen.getByRole('heading', { name: 'Create your account' })).toBeInTheDocument()
+  })
+
   it('signs in with a trimmed email and reports success', async () => {
     auth.signInWithPassword.mockResolvedValue({ data: {}, error: null })
     const user = userEvent.setup()
-    render(<AuthPage />)
+    await renderWithRouter(<AuthPage />)
 
     await user.type(screen.getByLabelText('Email'), '  ada@example.com  ')
     await user.type(screen.getByLabelText('Password'), 'hunter22')
@@ -53,7 +60,7 @@ describe('AuthPage', () => {
       error: { message: 'Invalid login credentials' },
     })
     const user = userEvent.setup()
-    render(<AuthPage />)
+    await renderWithRouter(<AuthPage />)
 
     await user.type(screen.getByLabelText('Email'), 'ada@example.com')
     await user.type(screen.getByLabelText('Password'), 'wrong-password')
@@ -66,7 +73,7 @@ describe('AuthPage', () => {
   it('signs up with the display name in user metadata', async () => {
     auth.signUp.mockResolvedValue({ data: { user: { id: 'user-1' }, session: {} }, error: null })
     const user = userEvent.setup()
-    render(<AuthPage />)
+    await renderWithRouter(<AuthPage />)
 
     await user.click(screen.getByRole('link', { name: 'Sign up' }))
     await user.type(screen.getByLabelText('Display Name'), ' Ada Lovelace ')
@@ -85,7 +92,7 @@ describe('AuthPage', () => {
   it('requests a reset link from the forgot-password view, keeping the typed email', async () => {
     auth.resetPasswordForEmail.mockResolvedValue({ data: {}, error: null })
     const user = userEvent.setup()
-    render(<AuthPage />)
+    await renderWithRouter(<AuthPage />)
 
     await user.type(screen.getByLabelText('Email'), 'ada@example.com')
     await user.click(screen.getByRole('link', { name: 'Forgot your password?' }))
@@ -115,7 +122,7 @@ describe('AuthPage', () => {
       error: { message: 'Email rate limit exceeded' },
     })
     const user = userEvent.setup()
-    render(<AuthPage />)
+    await renderWithRouter(<AuthPage />)
 
     await user.click(screen.getByRole('link', { name: 'Forgot your password?' }))
     await user.type(screen.getByLabelText('Email'), 'ada@example.com')
@@ -127,7 +134,7 @@ describe('AuthPage', () => {
   it('asks the user to confirm their email when sign-up returns no session', async () => {
     auth.signUp.mockResolvedValue({ data: { user: { id: 'user-1' }, session: null }, error: null })
     const user = userEvent.setup()
-    render(<AuthPage />)
+    await renderWithRouter(<AuthPage />)
 
     await user.click(screen.getByRole('link', { name: 'Sign up' }))
     await user.type(screen.getByLabelText('Display Name'), 'Ada')
