@@ -9,6 +9,7 @@ import {
 import App from './App'
 import { RouteError, RouteNotFound, RoutePending } from '@/components/router/route-fallbacks'
 import { authStore } from '@/lib/auth/auth-store'
+import { readResetLinkError } from '@/lib/auth/password-reset'
 import { getMyProfile } from '@/lib/supabase/profiles'
 import { AuthPage } from './pages/auth-page'
 
@@ -25,17 +26,46 @@ const rootRoute = createRootRoute({
 const authRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  validateSearch: (search: Record<string, unknown>) => ({
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } => ({
     redirect: isSafeRedirect(search.redirect) ? search.redirect : undefined,
   }),
   beforeLoad: async ({ search }) => {
     await authStore.ready()
+    const auth = authStore.getSnapshot()
 
-    if (authStore.getSnapshot().status === 'signed-in') {
-      throw redirect({ href: search.redirect ?? DEFAULT_SIGNED_IN_PATH })
+    if (auth.status === 'signed-in') {
+      throw auth.passwordRecovery
+        ? redirect({ to: '/reset-password' })
+        : redirect({ href: search.redirect ?? DEFAULT_SIGNED_IN_PATH })
     }
   },
   component: AuthPage,
+})
+
+// Landing page for the email link. Supabase's redirect either carries a session (consumed by
+// the client before `ready()` resolves) or error params when the link is bad.
+const resetPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/reset-password',
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { error_code?: string; error_description?: string } => ({
+    error_code: typeof search.error_code === 'string' ? search.error_code : undefined,
+    error_description:
+      typeof search.error_description === 'string' ? search.error_description : undefined,
+  }),
+  beforeLoad: async ({ location, search }) => {
+    await authStore.ready()
+    const linkError = readResetLinkError(search, location.hash)
+
+    if (authStore.getSnapshot().status !== 'signed-in') {
+      if (!linkError) throw redirect({ to: '/' })
+      return { linkError }
+    }
+
+    return { linkError: null }
+  },
+  component: lazyRouteComponent(() => import('./pages/reset-password-page'), 'ResetPasswordPage'),
 })
 
 // Pathless layout: every route under it requires a session. The guard runs once here instead
@@ -49,6 +79,11 @@ const authenticatedRoute = createRoute({
 
     if (auth.status !== 'signed-in') {
       throw redirect({ to: '/', search: { redirect: location.href } })
+    }
+
+    // A recovery session may only be used to set a new password.
+    if (auth.passwordRecovery) {
+      throw redirect({ to: '/reset-password' })
     }
 
     return { user: auth.user }
@@ -78,6 +113,7 @@ const profileRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   authRoute,
+  resetPasswordRoute,
   authenticatedRoute.addChildren([dashboardRoute, profileRoute]),
 ])
 

@@ -12,6 +12,9 @@ vi.mock('@/components/layout/app-shell', () => ({ AppShell: () => <Outlet /> }))
 vi.mock('./pages/auth-page', () => ({ AuthPage: () => <div>auth page</div> }))
 vi.mock('./pages/dashboard-page', () => ({ DashboardPage: () => <div>dashboard page</div> }))
 vi.mock('./pages/profile-page', () => ({ ProfilePage: () => <div>profile page</div> }))
+vi.mock('./pages/reset-password-page', () => ({
+  ResetPasswordPage: () => <div>reset page</div>,
+}))
 
 const fakeStore = vi.hoisted(() => {
   const listeners = new Set<() => void>()
@@ -42,8 +45,10 @@ const signedIn: AuthState = {
   status: 'signed-in',
   session: { access_token: 'token', user: { id: 'user-1' } } as unknown as Session,
   user: { id: 'user-1' } as Session['user'],
+  passwordRecovery: false,
 }
 const signedOut: AuthState = { status: 'signed-out', session: null, user: null }
+const inRecovery: AuthState = { ...signedIn, passwordRecovery: true }
 
 const renderAt = (path: string) => {
   const router = createAppRouter({ history: createMemoryHistory({ initialEntries: [path] }) })
@@ -125,6 +130,72 @@ describe('signed in', () => {
 
     expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Go home' })).toHaveAttribute('href', '/')
+  })
+})
+
+describe('password recovery', () => {
+  it('sends a recovery session from / to the reset page', async () => {
+    fakeStore.set(inRecovery)
+    const router = renderAt('/')
+
+    expect(await screen.findByText('reset page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/reset-password')
+  })
+
+  it('keeps a recovery session out of the app until the password is set', async () => {
+    fakeStore.set(inRecovery)
+    const router = renderAt('/dashboard')
+
+    expect(await screen.findByText('reset page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/reset-password')
+    expect(getMyProfile).not.toHaveBeenCalled()
+  })
+
+  it('lets the user into the app once recovery is cleared', async () => {
+    fakeStore.set(inRecovery)
+    const router = renderAt('/reset-password')
+    const stopSyncing = syncRouterWithAuth(router)
+    await screen.findByText('reset page')
+
+    // USER_UPDATED clears the flag in the real store; the page then links to the dashboard.
+    fakeStore.set(signedIn)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/reset-password'))
+    await router.navigate({ to: '/dashboard' })
+
+    expect(await screen.findByText('dashboard page')).toBeInTheDocument()
+    stopSyncing()
+  })
+
+  it('shows the reset page for a signed-in user without recovery too', async () => {
+    fakeStore.set(signedIn)
+    const router = renderAt('/reset-password')
+
+    expect(await screen.findByText('reset page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/reset-password')
+  })
+
+  it('sends a signed-out visitor with no link error to /', async () => {
+    fakeStore.set(signedOut)
+    const router = renderAt('/reset-password')
+
+    expect(await screen.findByText('auth page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/')
+  })
+
+  it('keeps a signed-out visitor on the page when the link carried an error (query)', async () => {
+    fakeStore.set(signedOut)
+    const router = renderAt('/reset-password?error_code=otp_expired&error=access_denied')
+
+    expect(await screen.findByText('reset page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/reset-password')
+  })
+
+  it('keeps a signed-out visitor on the page when the link carried an error (hash)', async () => {
+    fakeStore.set(signedOut)
+    const router = renderAt('/reset-password#error=access_denied&error_code=otp_expired')
+
+    expect(await screen.findByText('reset page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/reset-password')
   })
 })
 
