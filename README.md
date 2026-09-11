@@ -1,8 +1,8 @@
 # Јадро Кода
 
-A React single-page app with Supabase authentication: email/password sign-up and login, a user
-`profiles` table with an editable profile page, and a dashboard shell with a collapsible sidebar
-and calendar panel.
+A React single-page app with a public marketing site and Supabase authentication: email/password
+sign-up, login and password reset, a user `profiles` table with an editable profile page, and a
+dashboard shell with a collapsible sidebar and calendar panel.
 
 ## Stack
 
@@ -22,8 +22,10 @@ cp .env.example .env   # then fill in your Supabase URL and publishable key
 pnpm dev
 ```
 
-The app throws on startup if either `VITE_SUPABASE_URL` or `VITE_SUPABASE_PUBLISHABLE_KEY` is
-missing — see [`src/lib/supabase/supabase.ts`](src/lib/supabase/supabase.ts).
+Without `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` the public site still runs (handy
+when working on marketing pages): the app logs a warning, treats every visitor as signed out, and
+any sign-in or data call reports "Supabase is not configured" in the UI. See
+[`src/lib/supabase/supabase.ts`](src/lib/supabase/supabase.ts).
 
 ### Supabase
 
@@ -49,23 +51,28 @@ client can only read its own row and update `display_name` / `phone`.
 
 ```
 src/
-  main.tsx              # React root; mounts the router
-  router.tsx            # Route tree; `_authenticated` layout guards and loads the profile
-                        # Dashboard and profile pages are lazy-loaded chunks
+  main.tsx              # React root; starts the theme store, mounts the router
+  router.tsx            # Route tree: `_public` (marketing), /login, /signup, /reset-password,
+                        # and `_authenticated` (guards + profile loader). Everything past the
+                        # marketing home is a lazy chunk.
   App.tsx               # Root layout (renders <Outlet />)
-  index.css             # Tailwind, shadcn theme tokens, font
+  index.css             # Tailwind, shadcn light/dark tokens, font
   config/site.ts        # Site-wide constants (title)
   lib/
     utils.ts            # cn() helper
     auth/               # Session store (one onAuthStateChange for the app) + route API
+    theme/              # Theme store: light / dark / system, persisted, applied to <html>
     supabase/           # Supabase client and profile queries
   features/
-    auth/               # Login / sign-up forms, auth page hook, sign-out hook
-    profile/            # Profile form, account details, profile page hook
+    auth/               # Auth layout, login / sign-up / reset forms and hooks
+    marketing/          # Placeholder copy for the public site (content.ts)
+    profile/            # Profile, change-password and account sections + page hook
   pages/                # Route components
   components/
     ui/                 # shadcn primitives (generated; edit sparingly)
-    layout/             # AppShell (sidebars + <Outlet />) and PageHeader (breadcrumbs)
+    layout/             # PublicLayout (marketing header/footer), AppShell (sidebars),
+                        # PageHeader (breadcrumbs)
+    theme/              # ThemeToggle dropdown
     router/             # Pending / error / not-found screens used by the router
     sidebar/            # Left and right sidebar composition
     navigation/         # Sidebar nav sections, team switcher, user menu
@@ -78,16 +85,47 @@ Tests live next to the code they cover as `*.test.ts(x)`.
 
 Path alias: `@/` → `src/`.
 
+## Routes
+
+| Path              | Who                 | What                                                   |
+| ----------------- | ------------------- | ------------------------------------------------------ |
+| `/`               | everyone            | Marketing home; signed-in visitors get a Dashboard CTA |
+| `/login`          | signed out          | Sign in (`?redirect=` honoured); signed in → dashboard |
+| `/signup`         | signed out          | Create account; signed in → dashboard                  |
+| `/reset-password` | from the email link | Set a new password, or request a fresh link            |
+| `/dashboard`      | signed in           | App shell                                              |
+| `/profile`        | signed in           | Profile, password, account, sign-out                   |
+
+Every route sets its `<title>` via TanStack's `head()`; the home page also sets a meta
+description. Marketing copy is placeholder and lives in `src/features/marketing/content.ts`.
+
 ## Auth flow
 
 `authStore` (`src/lib/auth/auth-store.ts`) holds the Supabase session behind a single
 `onAuthStateChange` subscription. Routes that need a session sit under the pathless
-`_authenticated` layout route, whose `beforeLoad` redirects to `/` (with `?redirect=`) when
+`_authenticated` layout route, whose `beforeLoad` redirects to `/login` (with `?redirect=`) when
 signed out and whose `loader` fetches the profile once for all children. The layout's own
 component is `AppShell`, so the sidebars stay mounted as pages change underneath; pages render a
 `PageHeader` plus their content. `main.tsx` calls
 `router.invalidate()` whenever the signed-in user changes, so sign-in, sign-out and expiry all
 resolve through the same guards — pages never navigate themselves.
+
+**Password reset.** "Forgot your password?" on `/login` calls `resetPasswordForEmail` with
+`redirectTo` set to `/reset-password`. Clicking the emailed link lands there with a session that
+supabase-js restores from the URL and flags with `PASSWORD_RECOVERY`; the store records
+`passwordRecovery: true` and every guard redirects to `/reset-password` until `updateUser`
+succeeds (`USER_UPDATED` clears the flag). A bad or expired link arrives with `error_code` in the
+URL instead of a session; the page shows why and offers to send a fresh link. The Supabase project
+must allow-list the reset URL — see [`supabase/README.md`](supabase/README.md). Signed-in users
+can also change their password from `/profile`; both screens share `usePasswordUpdate`.
+
+## Theme
+
+Light, dark or system, chosen from the toggle in the page header (and on the auth screens).
+`themeStore` (`src/lib/theme/theme-store.ts`) keeps the preference in `localStorage` under
+`theme`, follows the OS while on system, syncs across tabs, and toggles `.dark` on `<html>` —
+which is what the Tailwind `dark:` variant and the token overrides in `index.css` key off. An
+inline script in `index.html` applies the same rule before first paint so there is no flash.
 
 ## Testing
 
