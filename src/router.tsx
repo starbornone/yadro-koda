@@ -47,7 +47,7 @@ const profileRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([authRoute, dashboardRoute, profileRoute])
 
-export const router = createRouter({ routeTree } as unknown as Parameters<typeof createRouter>[0])
+export const router = createRouter({ routeTree })
 
 declare module '@tanstack/react-router' {
   interface Register {
