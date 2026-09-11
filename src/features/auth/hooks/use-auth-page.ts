@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
+import { requestPasswordReset } from '@/lib/auth/password-reset'
 import { supabase } from '@/lib/supabase/supabase'
 
 type AuthFormState = {
@@ -8,12 +9,12 @@ type AuthFormState = {
   password: string
 }
 
-type AuthView = 'login' | 'sign-up'
+export type AuthView = 'login' | 'sign-up' | 'forgot-password'
 
 // Session state lives in `authStore`; this hook only owns the form. On a successful sign-in the
 // store emits, the router re-runs the `/` guard, and that redirects to the destination.
-export const useAuthPage = () => {
-  const [authView, setAuthView] = useState<AuthView>('login')
+export const useAuthPage = (initialView: AuthView = 'login') => {
+  const [authView, setAuthView] = useState<AuthView>(initialView)
   const [formState, setFormState] = useState<AuthFormState>({
     displayName: '',
     email: '',
@@ -100,13 +101,35 @@ export const useAuthPage = () => {
     }
   }
 
-  const showLogIn = () => {
-    setAuthView('login')
+  const handleForgotPassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (loading) return
+
+    resetFeedback()
+    setLoading(true)
+
+    try {
+      const { error: resetError } = await requestPasswordReset(formState.email)
+
+      if (resetError) {
+        setError(resetError.message)
+        return
+      }
+
+      setMessage('Check your email for a link to reset your password.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const showSignUp = () => {
-    setAuthView('sign-up')
+  const showView = (view: AuthView) => {
+    resetFeedback()
+    setAuthView(view)
   }
+
+  const showLogIn = () => showView('login')
+  const showSignUp = () => showView('sign-up')
+  const showForgotPassword = () => showView('forgot-password')
 
   return {
     authView,
@@ -119,7 +142,9 @@ export const useAuthPage = () => {
     setPassword,
     handleSignIn,
     handleSignUp,
+    handleForgotPassword,
     showLogIn,
     showSignUp,
+    showForgotPassword,
   }
 }
