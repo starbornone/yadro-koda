@@ -62,9 +62,12 @@ export const AuthPage = () => {
           </div>
         </div>
         <div className="relative hidden bg-muted lg:block">
+          {/* Decorative; hidden below lg, so lazy-load to spare small screens the download. */}
           <img
-            src="https://images.unsplash.com/photo-1557515126-1bf9ada5cb93"
-            alt="Image"
+            src="https://images.unsplash.com/photo-1557515126-1bf9ada5cb93?auto=format&fit=crop&w=1920&q=80"
+            alt=""
+            loading="lazy"
+            decoding="async"
             className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
           />
         </div>

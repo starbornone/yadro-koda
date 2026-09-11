@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { RouterProvider, createMemoryHistory } from '@tanstack/react-router'
 import type { Session } from '@supabase/supabase-js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -105,11 +106,24 @@ describe('signed in', () => {
     expect(getMyProfile).toHaveBeenCalledWith('user-1')
   })
 
-  it('shows the error boundary when the profile fails to load', async () => {
-    getMyProfile.mockRejectedValue(new Error('permission denied'))
+  it('shows the error boundary when the profile fails to load, and can retry', async () => {
+    getMyProfile.mockRejectedValueOnce(new Error('permission denied'))
     renderAt('/dashboard')
 
-    expect(await screen.findByText('Something went wrong!')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Something went wrong' })).toBeInTheDocument()
+    expect(screen.getByText('permission denied')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+    expect(await screen.findByText('dashboard page')).toBeInTheDocument()
+    expect(getMyProfile).toHaveBeenCalledTimes(2)
+  })
+
+  it('renders the not-found page for unknown paths', async () => {
+    renderAt('/nope')
+
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Go home' })).toHaveAttribute('href', '/')
   })
 })
 

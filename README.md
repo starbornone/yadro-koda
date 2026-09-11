@@ -50,6 +50,7 @@ client can only read its own row and update `display_name` / `phone`.
 src/
   main.tsx              # React root; mounts the router
   router.tsx            # Route tree; `_authenticated` layout guards and loads the profile
+                        # Dashboard and profile pages are lazy-loaded chunks
   App.tsx               # Root layout (renders <Outlet />)
   index.css             # Tailwind, shadcn theme tokens, font
   config/site.ts        # Site-wide constants (title)
@@ -64,6 +65,7 @@ src/
   pages/                # Route components
   components/
     ui/                 # shadcn primitives (generated; edit sparingly)
+    router/             # Pending / error / not-found screens used by the router
     sidebar/            # Left and right sidebar composition
     navigation/         # Sidebar nav sections, team switcher, user menu
     calendar/           # Calendar panel widgets

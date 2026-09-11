@@ -2,15 +2,15 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   redirect,
   type RouterHistory,
 } from '@tanstack/react-router'
 import App from './App'
+import { RouteError, RouteNotFound, RoutePending } from '@/components/router/route-fallbacks'
 import { authStore } from '@/lib/auth/auth-store'
 import { getMyProfile } from '@/lib/supabase/profiles'
 import { AuthPage } from './pages/auth-page'
-import { DashboardPage } from './pages/dashboard-page'
-import { ProfilePage } from './pages/profile-page'
 
 const DEFAULT_SIGNED_IN_PATH = '/dashboard'
 
@@ -61,16 +61,18 @@ const authenticatedRoute = createRoute({
   staleTime: Infinity,
 })
 
+// The landing page stays in the main chunk; everything behind the guard is split out so a
+// signed-out visitor never downloads the dashboard.
 const dashboardRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: '/dashboard',
-  component: DashboardPage,
+  component: lazyRouteComponent(() => import('./pages/dashboard-page'), 'DashboardPage'),
 })
 
 const profileRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: '/profile',
-  component: ProfilePage,
+  component: lazyRouteComponent(() => import('./pages/profile-page'), 'ProfilePage'),
 })
 
 const routeTree = rootRoute.addChildren([
@@ -80,7 +82,15 @@ const routeTree = rootRoute.addChildren([
 
 // Factory so tests can build a router on a memory history; the app uses the default instance.
 export const createAppRouter = (options: { history?: RouterHistory } = {}) =>
-  createRouter({ routeTree, history: options.history })
+  createRouter({
+    routeTree,
+    history: options.history,
+    // Fetch a lazy route's chunk when a link to it is hovered or focused.
+    defaultPreload: 'intent',
+    defaultPendingComponent: RoutePending,
+    defaultErrorComponent: RouteError,
+    defaultNotFoundComponent: RouteNotFound,
+  })
 
 export const router = createAppRouter()
 
