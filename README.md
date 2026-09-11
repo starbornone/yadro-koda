@@ -26,10 +26,10 @@ missing — see [`src/lib/supabase/supabase.ts`](src/lib/supabase/supabase.ts).
 
 ### Supabase
 
-The app expects a `public.profiles` table with row-level security scoped to `auth.uid()`. The
-columns it reads and writes are defined by the `Profile` type in
-[`src/lib/supabase/profiles.ts`](src/lib/supabase/profiles.ts). The schema is not yet versioned in
-this repo.
+The schema lives in [`supabase/migrations`](supabase/migrations) — see
+[`supabase/README.md`](supabase/README.md) for how to apply it. In short: a `public.profiles`
+table, created and kept in sync with `auth.users` by triggers, with RLS and column grants so a
+client can only read its own row and update `display_name` / `phone`.
 
 ## Scripts
 
@@ -49,13 +49,14 @@ this repo.
 ```
 src/
   main.tsx              # React root; mounts the router
-  router.tsx            # Route tree and auth guards
+  router.tsx            # Route tree; `_authenticated` layout guards and loads the profile
   App.tsx               # Root layout (renders <Outlet />)
   index.css             # Tailwind, shadcn theme tokens, font
   config/site.ts        # Site-wide constants (title)
   lib/
     utils.ts            # cn() helper
-    supabase/           # Supabase client, auth snapshot, profile queries
+    auth/               # Session store (one onAuthStateChange for the app) + route API
+    supabase/           # Supabase client and profile queries
   features/
     auth/               # Login / sign-up forms and page hook
     dashboard/          # Dashboard page hook
@@ -70,6 +71,15 @@ src/
 ```
 
 Path alias: `@/` → `src/`.
+
+## Auth flow
+
+`authStore` (`src/lib/auth/auth-store.ts`) holds the Supabase session behind a single
+`onAuthStateChange` subscription. Routes that need a session sit under the pathless
+`_authenticated` layout route, whose `beforeLoad` redirects to `/` (with `?redirect=`) when
+signed out and whose `loader` fetches the profile once for all children. `main.tsx` calls
+`router.invalidate()` whenever the signed-in user changes, so sign-in, sign-out and expiry all
+resolve through the same guards — pages never navigate themselves.
 
 ## Conventions
 
