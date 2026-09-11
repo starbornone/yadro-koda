@@ -1,4 +1,3 @@
-import { Navigate } from '@tanstack/react-router'
 import { AuthFeedback } from '@/features/auth/components/auth-feedback'
 import { AuthLogInForm } from '@/features/auth/components/auth-log-in-form'
 import { AuthSignUpForm } from '@/features/auth/components/auth-sign-up-form'
@@ -8,7 +7,6 @@ import { siteConfig } from '@/config/site'
 
 export const AuthPage = () => {
   const {
-    user,
     authView,
     loading,
     error,
@@ -22,10 +20,6 @@ export const AuthPage = () => {
     showLogIn,
     showSignUp,
   } = useAuthPage()
-
-  if (user) {
-    return <Navigate to="/dashboard" replace />
-  }
 
   return (
     <>
@@ -60,10 +54,7 @@ export const AuthPage = () => {
                   onDisplayNameChange={setDisplayName}
                   onEmailChange={setEmail}
                   onPasswordChange={setPassword}
-                  onSignUp={(event) => {
-                    event.preventDefault()
-                    void handleSignUp()
-                  }}
+                  onSignUp={handleSignUp}
                   onShowLogIn={showLogIn}
                 />
               )}
