@@ -11,22 +11,7 @@ import { Separator } from '@/components/ui/separator'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 
 export const DashboardPage = () => {
-  const { isLoading, user, profile } = useDashboardPage()
-
-  const displayNameFromMetadata =
-    typeof user?.user_metadata?.display_name === 'string' ? user.user_metadata.display_name : null
-  const avatarFromMetadata =
-    typeof user?.user_metadata?.avatar_url === 'string'
-      ? user.user_metadata.avatar_url
-      : typeof user?.user_metadata?.picture === 'string'
-        ? user.user_metadata.picture
-        : ''
-  const resolvedName = profile?.display_name?.trim() || displayNameFromMetadata || 'User'
-  const resolvedEmail = profile?.email || user?.email || ''
-
-  if (isLoading) {
-    return null
-  }
+  const { displayUser } = useDashboardPage()
 
   return (
     <SidebarProvider>
@@ -52,13 +37,7 @@ export const DashboardPage = () => {
           <div className="mx-auto h-[100vh] w-full max-w-3xl rounded-xl bg-muted/50" />
         </div>
       </SidebarInset>
-      <SidebarRight
-        user={{
-          name: resolvedName,
-          email: resolvedEmail,
-          avatar: avatarFromMetadata,
-        }}
-      />
+      <SidebarRight user={displayUser} />
     </SidebarProvider>
   )
 }
