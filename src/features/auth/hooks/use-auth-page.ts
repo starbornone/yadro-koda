@@ -166,25 +166,6 @@ export const useAuthPage = () => {
     }
   }
 
-  const handleSignOut = async () => {
-    if (loading) return
-
-    resetFeedback()
-    setLoading(true)
-
-    try {
-      const { error: signOutError } = await supabase.auth.signOut()
-      if (signOutError) {
-        setError(signOutError.message)
-        return
-      }
-
-      setMessage('Signed out.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const showLogIn = () => {
     setAuthView('login')
   }
@@ -206,7 +187,6 @@ export const useAuthPage = () => {
     setPassword,
     handleSignIn,
     handleSignUp,
-    handleSignOut,
     showLogIn,
     showSignUp,
   }
