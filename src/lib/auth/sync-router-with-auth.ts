@@ -1,13 +1,19 @@
-import { authStore } from './auth-store'
+import { authStore, type AuthState } from './auth-store'
 
 type InvalidatableRouter = {
   invalidate: () => Promise<void>
 }
 
+// What the guards care about: who is signed in, and whether they must reset their password.
+const identityOf = (auth: AuthState) =>
+  auth.status === 'signed-in'
+    ? `${auth.user.id}:${auth.passwordRecovery ? 'recovery' : 'normal'}`
+    : null
+
 /**
- * Re-runs route guards whenever the signed-in user changes (sign-in, sign-out, session expiry,
- * another tab). `beforeLoad` redirects take it from there, so pages never navigate themselves.
- * Returns a cleanup function.
+ * Re-runs route guards whenever the signed-in identity changes (sign-in, sign-out, session
+ * expiry, another tab, entering or leaving password recovery). `beforeLoad` redirects take it
+ * from there, so pages never navigate themselves. Returns a cleanup function.
  */
 export const syncRouterWithAuth = (router: InvalidatableRouter) => {
   let cancelled = false
@@ -16,13 +22,13 @@ export const syncRouterWithAuth = (router: InvalidatableRouter) => {
   void authStore.ready().then(() => {
     if (cancelled) return
 
-    let userId = authStore.getSnapshot().user?.id ?? null
+    let identity = identityOf(authStore.getSnapshot())
 
     unsubscribe = authStore.subscribe(() => {
-      const nextUserId = authStore.getSnapshot().user?.id ?? null
-      if (nextUserId === userId) return
+      const nextIdentity = identityOf(authStore.getSnapshot())
+      if (nextIdentity === identity) return
 
-      userId = nextUserId
+      identity = nextIdentity
       void router.invalidate()
     })
   })

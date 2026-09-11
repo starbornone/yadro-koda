@@ -31,6 +31,7 @@ const signedIn = (userId: string): Extract<AuthState, { status: 'signed-in' }> =
   status: 'signed-in',
   session: { access_token: `token-${userId}`, user: { id: userId } } as unknown as Session,
   user: { id: userId } as Session['user'],
+  passwordRecovery: false,
 })
 const signedOut: AuthState = { status: 'signed-out', session: null, user: null }
 
@@ -88,6 +89,21 @@ describe('syncRouterWithAuth', () => {
     fakeStore.set(signedIn('user-2'))
     fakeStore.emit()
     expect(router.invalidate).toHaveBeenCalledTimes(1)
+  })
+
+  it('invalidates when the user enters or leaves password recovery', async () => {
+    fakeStore.set(signedIn('user-1'))
+    const router = { invalidate: vi.fn(() => Promise.resolve()) }
+    syncRouterWithAuth(router)
+    await flush()
+
+    fakeStore.set({ ...signedIn('user-1'), passwordRecovery: true })
+    fakeStore.emit()
+    expect(router.invalidate).toHaveBeenCalledTimes(1)
+
+    fakeStore.set(signedIn('user-1'))
+    fakeStore.emit()
+    expect(router.invalidate).toHaveBeenCalledTimes(2)
   })
 
   it('does not invalidate on a token refresh for the same user', async () => {
