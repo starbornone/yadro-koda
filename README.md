@@ -1,73 +1,79 @@
-# React + TypeScript + Vite
+# Јадро Кода
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A React single-page app with Supabase authentication: email/password sign-up and login, a user
+`profiles` table, and a dashboard shell with a collapsible sidebar and calendar panel.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- [Vite 8](https://vite.dev) + [React 19](https://react.dev) + TypeScript 6
+- [Tailwind CSS 4](https://tailwindcss.com) with [shadcn/ui](https://ui.shadcn.com) (`radix-luma` style, `radix-ui` primitives, `lucide-react` icons)
+- [TanStack Router](https://tanstack.com/router) (code-based routes)
+- [Supabase](https://supabase.com) (`@supabase/supabase-js`) for auth and data
+- ESLint 9 (flat config) + Prettier
 
-## React Compiler
+## Getting started
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Requires Node 24 and [pnpm](https://pnpm.io) 12.
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+pnpm install
+cp .env.example .env   # then fill in your Supabase URL and publishable key
+pnpm dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+The app throws on startup if either `VITE_SUPABASE_URL` or `VITE_SUPABASE_PUBLISHABLE_KEY` is
+missing — see [`src/lib/supabase/supabase.ts`](src/lib/supabase/supabase.ts).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Supabase
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+The app expects a `public.profiles` table with row-level security scoped to `auth.uid()`. The
+columns it reads and writes are defined by the `Profile` type in
+[`src/lib/supabase/profiles.ts`](src/lib/supabase/profiles.ts). The schema is not yet versioned in
+this repo.
+
+## Scripts
+
+| Script              | What it does                              |
+| ------------------- | ----------------------------------------- |
+| `pnpm dev`          | Start the Vite dev server with HMR        |
+| `pnpm build`        | Typecheck (`tsc -b`) and build to `dist/` |
+| `pnpm preview`      | Serve the production build locally        |
+| `pnpm typecheck`    | Typecheck only                            |
+| `pnpm lint`         | ESLint                                    |
+| `pnpm lint:fix`     | ESLint with autofix                       |
+| `pnpm format`       | Prettier, write                           |
+| `pnpm format:check` | Prettier, check only                      |
+
+## Project layout
+
 ```
+src/
+  main.tsx              # React root; mounts the router
+  router.tsx            # Route tree and auth guards
+  App.tsx               # Root layout (renders <Outlet />)
+  index.css             # Tailwind, shadcn theme tokens, font
+  config/site.ts        # Site-wide constants (title)
+  lib/
+    utils.ts            # cn() helper
+    supabase/           # Supabase client, auth snapshot, profile queries
+  features/
+    auth/               # Login / sign-up forms and page hook
+    dashboard/          # Dashboard page hook
+    profile/            # Profile page hook
+  pages/                # Route components
+  components/
+    ui/                 # shadcn primitives (generated; edit sparingly)
+    sidebar/            # Left and right sidebar composition
+    navigation/         # Sidebar nav sections, team switcher, user menu
+    calendar/           # Calendar panel widgets
+  hooks/                # Shared hooks (useIsMobile)
+```
+
+Path alias: `@/` → `src/`.
+
+## Conventions
+
+- Line endings are LF everywhere; `.gitattributes` enforces this on checkout so
+  `pnpm format:check` behaves the same on Windows and Unix.
+- shadcn components are added with `pnpm dlx shadcn@latest add <component>` and land in
+  `src/components/ui/`. Config lives in `components.json`.
