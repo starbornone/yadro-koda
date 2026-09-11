@@ -6,6 +6,7 @@ import { AuthPage } from './auth-page'
 const auth = vi.hoisted(() => ({
   signInWithPassword: vi.fn(),
   signUp: vi.fn(),
+  resetPasswordForEmail: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/supabase', () => ({ supabase: { auth } }))
@@ -13,6 +14,7 @@ vi.mock('@/lib/supabase/supabase', () => ({ supabase: { auth } }))
 beforeEach(() => {
   auth.signInWithPassword.mockReset()
   auth.signUp.mockReset()
+  auth.resetPasswordForEmail.mockReset()
 })
 
 describe('AuthPage', () => {
@@ -78,6 +80,48 @@ describe('AuthPage', () => {
       options: { data: { display_name: 'Ada Lovelace' } },
     })
     expect(await screen.findByText('Account created and signed in.')).toBeInTheDocument()
+  })
+
+  it('requests a reset link from the forgot-password view, keeping the typed email', async () => {
+    auth.resetPasswordForEmail.mockResolvedValue({ data: {}, error: null })
+    const user = userEvent.setup()
+    render(<AuthPage />)
+
+    await user.type(screen.getByLabelText('Email'), 'ada@example.com')
+    await user.click(screen.getByRole('link', { name: 'Forgot your password?' }))
+
+    expect(screen.getByRole('heading', { name: 'Reset your password' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).toHaveValue('ada@example.com')
+
+    await user.click(screen.getByRole('button', { name: 'Send reset link' }))
+
+    expect(auth.resetPasswordForEmail).toHaveBeenCalledWith('ada@example.com', {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
+    expect(
+      await screen.findByText('Check your email for a link to reset your password.'),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('link', { name: 'Back to login' }))
+    expect(screen.getByRole('heading', { name: 'Login to your account' })).toBeInTheDocument()
+    expect(
+      screen.queryByText('Check your email for a link to reset your password.'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('surfaces a reset request error', async () => {
+    auth.resetPasswordForEmail.mockResolvedValue({
+      data: {},
+      error: { message: 'Email rate limit exceeded' },
+    })
+    const user = userEvent.setup()
+    render(<AuthPage />)
+
+    await user.click(screen.getByRole('link', { name: 'Forgot your password?' }))
+    await user.type(screen.getByLabelText('Email'), 'ada@example.com')
+    await user.click(screen.getByRole('button', { name: 'Send reset link' }))
+
+    expect(await screen.findByText('Email rate limit exceeded')).toBeInTheDocument()
   })
 
   it('asks the user to confirm their email when sign-up returns no session', async () => {
