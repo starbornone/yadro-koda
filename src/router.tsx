@@ -7,11 +7,13 @@ import {
   type RouterHistory,
 } from '@tanstack/react-router'
 import App from './App'
+import { PublicLayout } from '@/components/layout/public-layout'
 import { RouteError, RouteNotFound, RoutePending } from '@/components/router/route-fallbacks'
 import { authStore } from '@/lib/auth/auth-store'
 import { readResetLinkError } from '@/lib/auth/password-reset'
 import { getMyProfile } from '@/lib/supabase/profiles'
-import { AuthPage } from './pages/auth-page'
+import { homeContent } from '@/features/marketing/content'
+import { HomePage } from './pages/home-page'
 
 const DEFAULT_SIGNED_IN_PATH = '/dashboard'
 
@@ -19,27 +21,72 @@ const DEFAULT_SIGNED_IN_PATH = '/dashboard'
 const isSafeRedirect = (value: unknown): value is string =>
   typeof value === 'string' && value.startsWith('/') && !value.startsWith('//')
 
+const validateRedirectSearch = (search: Record<string, unknown>): { redirect?: string } => ({
+  redirect: isSafeRedirect(search.redirect) ? search.redirect : undefined,
+})
+
+// Login and sign-up are for signed-out visitors; a session goes where it was headed, or to
+// the reset page if it is a password-recovery session.
+const redirectSignedInAway = async ({ search }: { search: { redirect?: string } }) => {
+  await authStore.ready()
+  const auth = authStore.getSnapshot()
+
+  if (auth.status === 'signed-in') {
+    throw auth.passwordRecovery
+      ? redirect({ to: '/reset-password' })
+      : redirect({ href: search.redirect ?? DEFAULT_SIGNED_IN_PATH })
+  }
+}
+
 const rootRoute = createRootRoute({
   component: App,
 })
 
-const authRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/',
-  validateSearch: (search: Record<string, unknown>): { redirect?: string } => ({
-    redirect: isSafeRedirect(search.redirect) ? search.redirect : undefined,
-  }),
-  beforeLoad: async ({ search }) => {
-    await authStore.ready()
-    const auth = authStore.getSnapshot()
+// ---------------------------------------------------------------------------
+// Public (marketing) site
+// ---------------------------------------------------------------------------
 
-    if (auth.status === 'signed-in') {
-      throw auth.passwordRecovery
-        ? redirect({ to: '/reset-password' })
-        : redirect({ href: search.redirect ?? DEFAULT_SIGNED_IN_PATH })
-    }
-  },
-  component: AuthPage,
+// Pathless layout: header, footer, and a resolved session so the header can show the right
+// call to action on first render. Signed-in visitors are welcome here.
+const publicRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: '_public',
+  beforeLoad: () => authStore.ready(),
+  component: PublicLayout,
+})
+
+const homeRoute = createRoute({
+  getParentRoute: () => publicRoute,
+  path: '/',
+  head: () => ({
+    meta: [
+      { title: homeContent.meta.title },
+      { name: 'description', content: homeContent.meta.description },
+    ],
+  }),
+  component: HomePage,
+})
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+const loginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/login',
+  validateSearch: validateRedirectSearch,
+  beforeLoad: redirectSignedInAway,
+  head: () => ({ meta: [{ title: 'Sign in' }] }),
+  component: lazyRouteComponent(() => import('./pages/auth-page'), 'AuthPage'),
+})
+
+const signUpRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/signup',
+  validateSearch: validateRedirectSearch,
+  beforeLoad: redirectSignedInAway,
+  head: () => ({ meta: [{ title: 'Create your account' }] }),
+  component: lazyRouteComponent(() => import('./pages/auth-page'), 'SignUpPage'),
 })
 
 // Landing page for the email link. Supabase's redirect either carries a session (consumed by
@@ -59,14 +106,19 @@ const resetPasswordRoute = createRoute({
     const linkError = readResetLinkError(search, location.hash)
 
     if (authStore.getSnapshot().status !== 'signed-in') {
-      if (!linkError) throw redirect({ to: '/' })
+      if (!linkError) throw redirect({ to: '/login' })
       return { linkError }
     }
 
     return { linkError: null }
   },
+  head: () => ({ meta: [{ title: 'Reset your password' }] }),
   component: lazyRouteComponent(() => import('./pages/reset-password-page'), 'ResetPasswordPage'),
 })
+
+// ---------------------------------------------------------------------------
+// App (requires a session)
+// ---------------------------------------------------------------------------
 
 // Pathless layout: every route under it requires a session. The guard runs once here instead
 // of per-route, and the profile is loaded once for all children.
@@ -78,7 +130,7 @@ const authenticatedRoute = createRoute({
     const auth = authStore.getSnapshot()
 
     if (auth.status !== 'signed-in') {
-      throw redirect({ to: '/', search: { redirect: location.href } })
+      throw redirect({ to: '/login', search: { redirect: location.href } })
     }
 
     // A recovery session may only be used to set a new password.
@@ -91,28 +143,32 @@ const authenticatedRoute = createRoute({
   loader: async ({ context }) => ({
     profile: await getMyProfile(context.user.id),
   }),
-  component: lazyRouteComponent(() => import('@/components/layout/app-shell'), 'AppShell'),
   // Profile only changes through this app; refetch on explicit `router.invalidate()`, not on
   // every navigation.
   staleTime: Infinity,
+  // The marketing page stays in the main chunk; everything behind the guard (including the
+  // shell) is split out so a visitor never downloads the dashboard.
+  component: lazyRouteComponent(() => import('@/components/layout/app-shell'), 'AppShell'),
 })
 
-// The landing page stays in the main chunk; everything behind the guard (including the shell
-// above) is split out so a signed-out visitor never downloads the dashboard.
 const dashboardRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: '/dashboard',
+  head: () => ({ meta: [{ title: 'Dashboard' }] }),
   component: lazyRouteComponent(() => import('./pages/dashboard-page'), 'DashboardPage'),
 })
 
 const profileRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: '/profile',
+  head: () => ({ meta: [{ title: 'Profile' }] }),
   component: lazyRouteComponent(() => import('./pages/profile-page'), 'ProfilePage'),
 })
 
 const routeTree = rootRoute.addChildren([
-  authRoute,
+  publicRoute.addChildren([homeRoute]),
+  loginRoute,
+  signUpRoute,
   resetPasswordRoute,
   authenticatedRoute.addChildren([dashboardRoute, profileRoute]),
 ])

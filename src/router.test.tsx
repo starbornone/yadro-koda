@@ -7,9 +7,14 @@ import type { AuthState } from '@/lib/auth/auth-store'
 import { syncRouterWithAuth } from '@/lib/auth/sync-router-with-auth'
 import { createAppRouter } from './router'
 
-// Pages and the shell are stubbed: these tests are about guards, redirects and the loader.
+// Pages and layouts are stubbed: these tests are about guards, redirects and the loader.
 vi.mock('@/components/layout/app-shell', () => ({ AppShell: () => <Outlet /> }))
-vi.mock('./pages/auth-page', () => ({ AuthPage: () => <div>auth page</div> }))
+vi.mock('@/components/layout/public-layout', () => ({ PublicLayout: () => <Outlet /> }))
+vi.mock('./pages/home-page', () => ({ HomePage: () => <div>home page</div> }))
+vi.mock('./pages/auth-page', () => ({
+  AuthPage: () => <div>auth page</div>,
+  SignUpPage: () => <div>sign-up page</div>,
+}))
 vi.mock('./pages/dashboard-page', () => ({ DashboardPage: () => <div>dashboard page</div> }))
 vi.mock('./pages/profile-page', () => ({ ProfilePage: () => <div>profile page</div> }))
 vi.mock('./pages/reset-password-page', () => ({
@@ -60,27 +65,47 @@ beforeEach(() => {
   getMyProfile.mockReset().mockResolvedValue({ id: 'user-1', display_name: 'Ada' })
 })
 
-describe('signed out', () => {
-  beforeEach(() => fakeStore.set(signedOut))
-
-  it('renders the auth page at /', async () => {
+describe('public site', () => {
+  it('shows the home page to signed-out visitors', async () => {
+    fakeStore.set(signedOut)
     const router = renderAt('/')
 
-    expect(await screen.findByText('auth page')).toBeInTheDocument()
+    expect(await screen.findByText('home page')).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/')
   })
 
-  it('redirects protected routes to / and remembers where the user was going', async () => {
+  it('shows the home page to signed-in visitors too', async () => {
+    fakeStore.set(signedIn)
+    const router = renderAt('/')
+
+    expect(await screen.findByText('home page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/')
+    expect(getMyProfile).not.toHaveBeenCalled()
+  })
+})
+
+describe('signed out', () => {
+  beforeEach(() => fakeStore.set(signedOut))
+
+  it('renders login at /login and sign-up at /signup', async () => {
+    renderAt('/login')
+    expect(await screen.findByText('auth page')).toBeInTheDocument()
+
+    renderAt('/signup')
+    expect(await screen.findByText('sign-up page')).toBeInTheDocument()
+  })
+
+  it('redirects protected routes to /login and remembers where the user was going', async () => {
     const router = renderAt('/profile')
 
     expect(await screen.findByText('auth page')).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/')
+    expect(router.state.location.pathname).toBe('/login')
     expect(router.state.location.search).toEqual({ redirect: '/profile' })
     expect(getMyProfile).not.toHaveBeenCalled()
   })
 
   it('drops a redirect target that is not a same-origin path', async () => {
-    const router = renderAt('/?redirect=https://evil.example')
+    const router = renderAt('/login?redirect=https://evil.example')
 
     await screen.findByText('auth page')
     expect(router.state.location.search).toEqual({})
@@ -90,15 +115,17 @@ describe('signed out', () => {
 describe('signed in', () => {
   beforeEach(() => fakeStore.set(signedIn))
 
-  it('sends / to the dashboard', async () => {
-    const router = renderAt('/')
-
+  it('sends /login and /signup to the dashboard', async () => {
+    const login = renderAt('/login')
     expect(await screen.findByText('dashboard page')).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/dashboard')
+    expect(login.state.location.pathname).toBe('/dashboard')
+
+    const signup = renderAt('/signup')
+    await waitFor(() => expect(signup.state.location.pathname).toBe('/dashboard'))
   })
 
   it('honours a same-origin redirect target', async () => {
-    const router = renderAt('/?redirect=/profile')
+    const router = renderAt('/login?redirect=/profile')
 
     expect(await screen.findByText('profile page')).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/profile')
@@ -134,9 +161,9 @@ describe('signed in', () => {
 })
 
 describe('password recovery', () => {
-  it('sends a recovery session from / to the reset page', async () => {
+  it('sends a recovery session from /login to the reset page', async () => {
     fakeStore.set(inRecovery)
-    const router = renderAt('/')
+    const router = renderAt('/login')
 
     expect(await screen.findByText('reset page')).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/reset-password')
@@ -174,12 +201,12 @@ describe('password recovery', () => {
     expect(router.state.location.pathname).toBe('/reset-password')
   })
 
-  it('sends a signed-out visitor with no link error to /', async () => {
+  it('sends a signed-out visitor with no link error to /login', async () => {
     fakeStore.set(signedOut)
     const router = renderAt('/reset-password')
 
     expect(await screen.findByText('auth page')).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/')
+    expect(router.state.location.pathname).toBe('/login')
   })
 
   it('keeps a signed-out visitor on the page when the link carried an error (query)', async () => {
@@ -200,7 +227,7 @@ describe('password recovery', () => {
 })
 
 describe('session changes while on a page', () => {
-  it('kicks the user back to / when they sign out', async () => {
+  it('kicks the user back to /login when they sign out', async () => {
     fakeStore.set(signedIn)
     const router = renderAt('/dashboard')
     const stopSyncing = syncRouterWithAuth(router)
@@ -213,9 +240,9 @@ describe('session changes while on a page', () => {
     stopSyncing()
   })
 
-  it('moves the user off / when they sign in', async () => {
+  it('moves the user off /login when they sign in', async () => {
     fakeStore.set(signedOut)
-    const router = renderAt('/?redirect=/profile')
+    const router = renderAt('/login?redirect=/profile')
     const stopSyncing = syncRouterWithAuth(router)
     await screen.findByText('auth page')
 
