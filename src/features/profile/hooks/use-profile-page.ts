@@ -1,131 +1,44 @@
-import { useCallback, useEffect, useState } from 'react'
-import { getAuthSnapshot } from '@/lib/supabase/auth'
-import { updateMyProfile, type Profile } from '@/lib/supabase/profiles'
-import { supabase } from '@/lib/supabase/supabase'
-
-type ProfileState = {
-  isLoading: boolean
-  isSaving: boolean
-  isAuthenticated: boolean
-  userId: string | null
-  profile: Profile | null
-  error: string | null
-  message: string | null
-}
-
-const initialState: ProfileState = {
-  isLoading: true,
-  isSaving: false,
-  isAuthenticated: false,
-  userId: null,
-  profile: null,
-  error: null,
-  message: null,
-}
+import { useCallback, useState } from 'react'
+import { useRouter } from '@tanstack/react-router'
+import { authenticatedRoute } from '@/lib/auth/authenticated-route'
+import { updateMyProfile } from '@/lib/supabase/profiles'
 
 export const useProfilePage = () => {
-  const [state, setState] = useState<ProfileState>(initialState)
-
-  const refreshProfile = useCallback(async () => {
-    setState((prev) => ({ ...prev, isLoading: true, error: null }))
-
-    try {
-      const { user, profile } = await getAuthSnapshot()
-      setState((prev) => ({
-        ...prev,
-        isLoading: false,
-        isAuthenticated: Boolean(user),
-        userId: user?.id ?? null,
-        profile,
-      }))
-    } catch (error) {
-      setState((prev) => ({
-        ...prev,
-        isLoading: false,
-        isAuthenticated: false,
-        userId: null,
-        profile: null,
-        error: error instanceof Error ? error.message : 'Failed to load profile.',
-      }))
-    }
-  }, [])
-
-  useEffect(() => {
-    let isMounted = true
-
-    const load = async () => {
-      if (!isMounted) return
-      await refreshProfile()
-    }
-
-    void load()
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      if (!isMounted) return
-      void refreshProfile()
-    })
-
-    return () => {
-      isMounted = false
-      subscription.unsubscribe()
-    }
-  }, [refreshProfile])
+  const router = useRouter()
+  const { user } = authenticatedRoute.useRouteContext()
+  const { profile } = authenticatedRoute.useLoaderData()
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
 
   const updateDisplayName = useCallback(
     async (displayName: string) => {
-      if (state.isSaving) return
+      if (isSaving) return
 
-      setState((prev) => ({ ...prev, isSaving: true, error: null, message: null }))
+      setIsSaving(true)
+      setError(null)
+      setMessage(null)
 
       try {
-        const profile = await updateMyProfile({ display_name: displayName })
-        setState((prev) => ({
-          ...prev,
-          isSaving: false,
-          profile,
-          message: 'Profile updated.',
-        }))
-      } catch (error) {
-        setState((prev) => ({
-          ...prev,
-          isSaving: false,
-          error: error instanceof Error ? error.message : 'Failed to update profile.',
-        }))
+        await updateMyProfile(user.id, { display_name: displayName })
+        // The `_authenticated` loader owns `profile`; invalidating re-runs it with the new row.
+        await router.invalidate()
+        setMessage('Profile updated.')
+      } catch (updateError) {
+        setError(updateError instanceof Error ? updateError.message : 'Failed to update profile.')
+      } finally {
+        setIsSaving(false)
       }
     },
-    [state.isSaving],
+    [isSaving, router, user.id],
   )
 
-  const signOut = useCallback(async () => {
-    setState((prev) => ({ ...prev, isSaving: true, error: null, message: null }))
-
-    try {
-      const { error } = await supabase.auth.signOut()
-      if (error) {
-        setState((prev) => ({ ...prev, isSaving: false, error: error.message }))
-        return
-      }
-
-      setState({
-        ...initialState,
-        isLoading: false,
-        message: 'Signed out.',
-      })
-    } catch (error) {
-      setState((prev) => ({
-        ...prev,
-        isSaving: false,
-        error: error instanceof Error ? error.message : 'Failed to sign out.',
-      }))
-    }
-  }, [])
-
   return {
-    ...state,
-    refreshProfile,
+    user,
+    profile,
+    isSaving,
+    error,
+    message,
     updateDisplayName,
-    signOut,
   }
 }
