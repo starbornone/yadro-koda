@@ -7,12 +7,13 @@ import { ProfilePage } from './profile-page'
 const updateMyProfile = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/supabase/profiles', () => ({ updateMyProfile }))
 
-const signOut = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/supabase/supabase', () => ({ supabase: { auth: { signOut } } }))
+const auth = vi.hoisted(() => ({ signOut: vi.fn(), updateUser: vi.fn() }))
+vi.mock('@/lib/supabase/supabase', () => ({ supabase: { auth } }))
 
 beforeEach(() => {
   updateMyProfile.mockReset()
-  signOut.mockReset().mockResolvedValue({ error: null })
+  auth.signOut.mockReset().mockResolvedValue({ error: null })
+  auth.updateUser.mockReset()
 })
 
 describe('ProfilePage', () => {
@@ -81,18 +82,82 @@ describe('ProfilePage', () => {
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
   })
 
+  it('keeps Update password disabled until both fields are filled', async () => {
+    const user = userEvent.setup()
+    renderAuthenticated(<ProfilePage />)
+
+    const update = await screen.findByRole('button', { name: 'Update password' })
+    expect(update).toBeDisabled()
+
+    await user.type(screen.getByLabelText('New password'), 'hunter22')
+    expect(update).toBeDisabled()
+
+    await user.type(screen.getByLabelText('Confirm new password'), 'hunter22')
+    expect(update).toBeEnabled()
+  })
+
+  it('rejects mismatched passwords without calling Supabase', async () => {
+    const user = userEvent.setup()
+    renderAuthenticated(<ProfilePage />)
+
+    await user.type(await screen.findByLabelText('New password'), 'hunter22')
+    await user.type(screen.getByLabelText('Confirm new password'), 'hunter23')
+    await user.click(screen.getByRole('button', { name: 'Update password' }))
+
+    expect(await screen.findByText('Passwords do not match.')).toBeInTheDocument()
+    expect(auth.updateUser).not.toHaveBeenCalled()
+  })
+
+  it('changes the password, confirms, and clears the fields', async () => {
+    auth.updateUser.mockResolvedValue({ data: {}, error: null })
+    const user = userEvent.setup()
+    renderAuthenticated(<ProfilePage />)
+
+    await user.type(await screen.findByLabelText('New password'), 'hunter22')
+    await user.type(screen.getByLabelText('Confirm new password'), 'hunter22')
+    await user.click(screen.getByRole('button', { name: 'Update password' }))
+
+    expect(auth.updateUser).toHaveBeenCalledWith({ password: 'hunter22' })
+    expect(await screen.findByText('Password updated.')).toBeInTheDocument()
+    expect(screen.getByLabelText('New password')).toHaveValue('')
+    expect(screen.getByLabelText('Confirm new password')).toHaveValue('')
+    expect(screen.getByRole('button', { name: 'Update password' })).toBeDisabled()
+
+    // Editing again dismisses the confirmation.
+    await user.type(screen.getByLabelText('New password'), 'x')
+    expect(screen.queryByText('Password updated.')).not.toBeInTheDocument()
+  })
+
+  it('surfaces a password update error', async () => {
+    auth.updateUser.mockResolvedValue({
+      data: {},
+      error: { message: 'New password should be different from the old password.' },
+    })
+    const user = userEvent.setup()
+    renderAuthenticated(<ProfilePage />)
+
+    await user.type(await screen.findByLabelText('New password'), 'hunter22')
+    await user.type(screen.getByLabelText('Confirm new password'), 'hunter22')
+    await user.click(screen.getByRole('button', { name: 'Update password' }))
+
+    expect(
+      await screen.findByText('New password should be different from the old password.'),
+    ).toBeInTheDocument()
+    expect(screen.getByLabelText('New password')).toHaveValue('hunter22')
+  })
+
   it('signs out from the session section', async () => {
     const user = userEvent.setup()
     renderAuthenticated(<ProfilePage />)
 
     await user.click(await screen.findByRole('button', { name: 'Sign out' }))
 
-    expect(signOut).toHaveBeenCalledTimes(1)
+    expect(auth.signOut).toHaveBeenCalledTimes(1)
     await waitFor(() => expect(screen.getByRole('button', { name: 'Signing out…' })).toBeDisabled())
   })
 
   it('shows a sign-out error and re-enables the button', async () => {
-    signOut.mockResolvedValue({ error: { message: 'Network error' } })
+    auth.signOut.mockResolvedValue({ error: { message: 'Network error' } })
     const user = userEvent.setup()
     renderAuthenticated(<ProfilePage />)
 

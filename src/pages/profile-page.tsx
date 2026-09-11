@@ -3,6 +3,7 @@ import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { AccountDetails } from '@/features/profile/components/account-details'
+import { ChangePasswordForm } from '@/features/profile/components/change-password-form'
 import { ProfileForm } from '@/features/profile/components/profile-form'
 import { useProfilePage } from '@/features/profile/hooks/use-profile-page'
 
@@ -18,6 +19,7 @@ export const ProfilePage = () => {
     setDisplayName,
     setPhone,
     handleSave,
+    passwordForm,
     signOut,
     isSigningOut,
     signOutError,
@@ -38,6 +40,19 @@ export const ProfilePage = () => {
             onDisplayNameChange={setDisplayName}
             onPhoneChange={setPhone}
             onSave={handleSave}
+          />
+
+          <Separator />
+
+          <ChangePasswordForm
+            password={passwordForm.password}
+            confirmPassword={passwordForm.confirmPassword}
+            loading={passwordForm.loading}
+            error={passwordForm.error}
+            isDone={passwordForm.isDone}
+            onPasswordChange={passwordForm.setPassword}
+            onConfirmPasswordChange={passwordForm.setConfirmPassword}
+            onSubmit={passwordForm.handleSubmit}
           />
 
           <Separator />
