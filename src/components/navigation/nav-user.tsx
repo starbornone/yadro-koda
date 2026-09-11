@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -16,7 +16,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { ChevronsUpDownIcon, BadgeCheckIcon, LogOutIcon } from 'lucide-react'
-import { supabase } from '@/lib/supabase/supabase'
+import { useSignOut } from '@/features/auth/hooks/use-sign-out'
 
 const getAvatarFallback = (displayName: string, email: string) => {
   const nameParts = displayName.trim().split(/\s+/).filter(Boolean)
@@ -46,24 +46,8 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
-  const [isSigningOut, setIsSigningOut] = useState(false)
-  const [signOutError, setSignOutError] = useState<string | null>(null)
+  const { signOut, isSigningOut, error: signOutError } = useSignOut()
   const avatarFallback = getAvatarFallback(user.name, user.email)
-
-  // No navigation here: the auth store emits SIGNED_OUT, the router re-runs the
-  // `_authenticated` guard, and that redirects to `/`.
-  const handleSignOut = useCallback(async () => {
-    if (isSigningOut) return
-
-    setSignOutError(null)
-    setIsSigningOut(true)
-
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      setSignOutError(error.message)
-      setIsSigningOut(false)
-    }
-  }, [isSigningOut])
 
   return (
     <SidebarMenu>
@@ -105,9 +89,11 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <BadgeCheckIcon />
-                Account
+              <DropdownMenuItem asChild>
+                <Link to="/profile">
+                  <BadgeCheckIcon />
+                  Account
+                </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
@@ -116,7 +102,7 @@ export function NavUser({
                 {signOutError}
               </DropdownMenuLabel>
             ) : null}
-            <DropdownMenuItem onClick={() => void handleSignOut()} disabled={isSigningOut}>
+            <DropdownMenuItem onClick={() => void signOut()} disabled={isSigningOut}>
               <LogOutIcon />
               {isSigningOut ? 'Signing out...' : 'Log out'}
             </DropdownMenuItem>

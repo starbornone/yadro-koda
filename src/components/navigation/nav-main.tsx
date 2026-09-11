@@ -1,25 +1,33 @@
+import { Link, useMatchRoute, type LinkProps } from '@tanstack/react-router'
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar'
 
-export function NavMain({
-  items,
-}: {
-  items: {
-    title: string
-    url: string
-    icon: React.ReactNode
-    isActive?: boolean
-  }[]
-}) {
+export type NavMainItem = {
+  title: string
+  icon: React.ReactNode
+  /** Route to navigate to. Items without one render as inert buttons until they have a page. */
+  to?: LinkProps['to']
+}
+
+export function NavMain({ items }: { items: NavMainItem[] }) {
+  const matchRoute = useMatchRoute()
+
   return (
     <SidebarMenu>
       {items.map((item) => (
         <SidebarMenuItem key={item.title}>
-          <SidebarMenuButton asChild isActive={item.isActive}>
-            <a href={item.url}>
+          {item.to ? (
+            <SidebarMenuButton asChild isActive={Boolean(matchRoute({ to: item.to }))}>
+              <Link to={item.to}>
+                {item.icon}
+                <span>{item.title}</span>
+              </Link>
+            </SidebarMenuButton>
+          ) : (
+            <SidebarMenuButton>
               {item.icon}
               <span>{item.title}</span>
-            </a>
-          </SidebarMenuButton>
+            </SidebarMenuButton>
+          )}
         </SidebarMenuItem>
       ))}
     </SidebarMenu>
