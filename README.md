@@ -68,7 +68,10 @@ src/
     navigation/         # Sidebar nav sections, team switcher, user menu
     calendar/           # Calendar panel widgets
   hooks/                # Shared hooks (useIsMobile)
+  test/setup.ts         # Vitest setup: jest-dom matchers, jsdom stubs
 ```
+
+Tests live next to the code they cover as `*.test.ts(x)`.
 
 Path alias: `@/` → `src/`.
 
@@ -80,6 +83,16 @@ Path alias: `@/` → `src/`.
 signed out and whose `loader` fetches the profile once for all children. `main.tsx` calls
 `router.invalidate()` whenever the signed-in user changes, so sign-in, sign-out and expiry all
 resolve through the same guards — pages never navigate themselves.
+
+## Testing
+
+Vitest + Testing Library on jsdom (`vitest.config.ts`). The Supabase client is always mocked —
+`vi.mock('@/lib/supabase/supabase', …)` — so tests never need credentials or a network.
+`router.test.tsx` exercises the real route tree on a memory history with the pages stubbed, which
+is where guard and redirect behaviour is pinned down.
+
+CI (`.github/workflows/ci.yml`) runs format, lint, typecheck, test and build on every push to
+`main` and every pull request.
 
 ## Conventions
 
