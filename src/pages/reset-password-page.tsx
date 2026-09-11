@@ -27,7 +27,7 @@ const ExpiredLink = ({ reason }: { reason: string }) => {
           onSubmit={forgot.handleSubmit}
         />
         <p className="mt-6 text-center text-sm text-muted-foreground">
-          <Link to="/" className="underline underline-offset-4">
+          <Link to="/login" className="underline underline-offset-4">
             Back to login
           </Link>
         </p>

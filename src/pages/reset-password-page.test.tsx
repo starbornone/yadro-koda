@@ -117,7 +117,7 @@ describe('ResetPasswordPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Link expired' })).toBeInTheDocument()
     expect(screen.getByText(/This password reset link has expired\./)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Back to login' })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: 'Back to login' })).toHaveAttribute('href', '/login')
 
     await user.type(screen.getByLabelText('Email'), 'ada@example.com')
     await user.click(screen.getByRole('button', { name: 'Send reset link' }))
