@@ -90,7 +90,7 @@ export function NavUser({
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem asChild>
-                <Link to="/profile">
+                <Link to="/app/profile">
                   <BadgeCheckIcon />
                   Account
                 </Link>
