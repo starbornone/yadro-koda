@@ -1,8 +1,9 @@
 # Јадро Кода
 
-A React single-page app with a public marketing site and Supabase authentication: email/password
-sign-up, login and password reset, a user `profiles` table with an editable profile page, and a
-dashboard shell with a collapsible sidebar and calendar panel.
+A React single-page app boilerplate for organisation-based (multi-tenant) products: a public
+marketing site, Supabase authentication (email/password sign-up, login, password reset and
+change), user profiles, organisations with role-based memberships, and an app shell with an
+organisation switcher.
 
 ## Stack
 
@@ -29,10 +30,11 @@ any sign-in or data call reports "Supabase is not configured" in the UI. See
 
 ### Supabase
 
-The schema lives in [`supabase/migrations`](supabase/migrations) — see
+The schema is declared in [`supabase/schemas`](supabase/schemas) — see
 [`supabase/README.md`](supabase/README.md) for how to apply it. In short: a `public.profiles`
-table, created and kept in sync with `auth.users` by triggers, with RLS and column grants so a
-client can only read its own row and update `display_name` / `phone`.
+table kept in sync with `auth.users` by triggers; `organisations`, `memberships` and
+`platform_members` with RLS helpers (`is_org_member`, `has_org_role`, `platform_can_access_org`);
+and column grants so clients can only write the fields they own.
 
 ## Scripts
 
@@ -60,11 +62,12 @@ src/
   config/site.ts        # Site-wide constants (title)
   lib/
     utils.ts            # cn() helper
-    auth/               # Session store (one onAuthStateChange for the app) + route API
+    auth/               # Session store, route APIs (_authenticated, _app), permissions matrix
     theme/              # Theme store: light / dark / system, persisted, applied to <html>
-    supabase/           # Supabase client and profile queries
+    supabase/           # Supabase client, profile and organisation queries
   features/
     auth/               # Auth layout, login / sign-up / reset forms and hooks
+    organisations/      # Create-organisation form, organisation settings hook
     marketing/          # Placeholder copy for the public site (content.ts)
     profile/            # Profile, change-password and account sections + page hook
   pages/                # Route components
@@ -74,9 +77,8 @@ src/
                         # PageHeader (breadcrumbs)
     theme/              # ThemeToggle dropdown
     router/             # Pending / error / not-found screens used by the router
-    sidebar/            # Left and right sidebar composition
-    navigation/         # Sidebar nav sections, team switcher, user menu
-    calendar/           # Calendar panel widgets
+    sidebar/            # App sidebar composition
+    navigation/         # Nav items, organisation switcher, user menu
   hooks/                # Shared hooks (useIsMobile)
   test/setup.ts         # Vitest setup: jest-dom matchers, jsdom stubs
 ```
@@ -87,17 +89,42 @@ Path alias: `@/` → `src/`.
 
 ## Routes
 
-| Path              | Who                 | What                                                   |
-| ----------------- | ------------------- | ------------------------------------------------------ |
-| `/`               | everyone            | Marketing home; signed-in visitors get a Dashboard CTA |
-| `/login`          | signed out          | Sign in (`?redirect=` honoured); signed in → dashboard |
-| `/signup`         | signed out          | Create account; signed in → dashboard                  |
-| `/reset-password` | from the email link | Set a new password, or request a fresh link            |
-| `/dashboard`      | signed in           | App shell                                              |
-| `/profile`        | signed in           | Profile, password, account, sign-out                   |
+| Path                     | Who                 | What                                                   |
+| ------------------------ | ------------------- | ------------------------------------------------------ |
+| `/`                      | everyone            | Marketing home; signed-in visitors get a Dashboard CTA |
+| `/login`                 | signed out          | Sign in (`?redirect=` honoured); signed in → dashboard |
+| `/signup`                | signed out          | Create account; signed in → dashboard                  |
+| `/reset-password`        | from the email link | Set a new password, or request a fresh link            |
+| `/onboarding`            | signed in, no org   | Create your first organisation                         |
+| `/app`                   | signed in + member  | Dashboard, inside the active organisation              |
+| `/app/settings`          | signed in + member  | Organisation settings (owners/admins can edit)         |
+| `/app/organisations/new` | signed in + member  | Create another organisation                            |
+| `/app/profile`           | signed in + member  | Profile, password, account, sign-out                   |
 
 Every route sets its `<title>` via TanStack's `head()`; the home page also sets a meta
 description. Marketing copy is placeholder and lives in `src/features/marketing/content.ts`.
+
+## Organisations and roles
+
+Every product object belongs to an **organisation**; users join through `memberships` with an
+`org_role` (`owner` | `admin` | `member` — generic names a product renames). A second, separate
+layer — `platform_members` with a `platform_role` — marks the company's own staff; its UI comes
+later, but tenant RLS already routes staff access through one function,
+`platform_can_access_org()`, so it can be narrowed in one place.
+
+- `create_organisation()` (RPC) is the only way to make an organisation: it inserts the row,
+  makes the caller its owner and marks it active, atomically.
+- The `_authenticated` route loads `profile` + `memberships` once; the `_app` layout beneath it
+  reads them through `parentMatchPromise`, redirects to `/onboarding` when there are none, and
+  resolves the active organisation (`profiles.active_org_id`, else the first membership) into its
+  loader data as `{ org, role, memberships }`. Pages reach it via `appRoute.useLoaderData()`.
+- Switching organisations writes `active_org_id` and calls `router.invalidate()`. The router runs
+  reloads in **blocking** mode (`defaultStaleReloadMode`) so child loaders always see fresh parent
+  data after an invalidate.
+- `canInOrg(role, action)` in `src/lib/auth/permissions.ts` decides what the UI shows; RLS
+  decides what the database allows. Both must agree; the database wins.
+- `memberships.expires_at` supports time-boxed access (e.g. an external reviewer) — RLS ignores
+  expired memberships.
 
 ## Auth flow
 
@@ -136,8 +163,8 @@ is where guard and redirect behaviour is pinned down. Pages that live under the 
 tested with `renderAuthenticated()` from `src/test/render-authenticated.tsx`, which supplies the
 `_authenticated` route context and loader data without the real guards.
 
-CI (`.github/workflows/ci.yml`) runs format, lint, typecheck, test and build on every push to
-`main` and every pull request.
+CI (`.github/workflows/ci.yml`) runs format, lint, typecheck, schema check, test and build on
+every push to `main` and every pull request.
 
 ## Conventions
 
