@@ -11,11 +11,12 @@ import { PublicLayout } from '@/components/layout/public-layout'
 import { RouteError, RouteNotFound, RoutePending } from '@/components/router/route-fallbacks'
 import { authStore } from '@/lib/auth/auth-store'
 import { readResetLinkError } from '@/lib/auth/password-reset'
+import { getMyMemberships } from '@/lib/supabase/organisations'
 import { getMyProfile } from '@/lib/supabase/profiles'
 import { homeContent } from '@/features/marketing/content'
 import { HomePage } from './pages/home-page'
 
-const DEFAULT_SIGNED_IN_PATH = '/dashboard'
+const DEFAULT_SIGNED_IN_PATH = '/app'
 
 // Only accept same-origin paths as a post-login destination (blocks `?redirect=https://…`).
 const isSafeRedirect = (value: unknown): value is string =>
@@ -117,11 +118,13 @@ const resetPasswordRoute = createRoute({
 })
 
 // ---------------------------------------------------------------------------
-// App (requires a session)
+// Signed in
 // ---------------------------------------------------------------------------
 
 // Pathless layout: every route under it requires a session. The guard runs once here instead
-// of per-route, and the profile is loaded once for all children.
+// of per-route, and the profile and memberships are loaded once for all children. Guards that
+// need that data (below) live in child *loaders* and read it via `parentMatchPromise`, so the
+// query is shared rather than repeated.
 const authenticatedRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: '_authenticated',
@@ -140,27 +143,94 @@ const authenticatedRoute = createRoute({
 
     return { user: auth.user }
   },
-  loader: async ({ context }) => ({
-    profile: await getMyProfile(context.user.id),
-  }),
-  // Profile only changes through this app; refetch on explicit `router.invalidate()`, not on
+  loader: async ({ context }) => {
+    const [profile, memberships] = await Promise.all([
+      getMyProfile(context.user.id),
+      getMyMemberships(context.user.id),
+    ])
+    return { profile, memberships }
+  },
+  // These only change through this app; refetch on explicit `router.invalidate()`, not on
   // every navigation.
   staleTime: Infinity,
+})
+
+// A child loader reads its parent's data through `parentMatchPromise`. If the parent loader
+// failed there is no data — surface that error rather than guessing (an empty fallback would
+// send a user whose profile failed to load into onboarding).
+const loaderDataOf = <T,>(match: { loaderData?: T; error?: unknown }): T => {
+  if (match.loaderData === undefined) {
+    throw match.error ?? new Error('Route data is unavailable.')
+  }
+  return match.loaderData
+}
+
+// A signed-in user with no organisation yet. Once they have one, this sends them into the app.
+const onboardingRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: '/onboarding',
+  loader: async ({ parentMatchPromise }) => {
+    const { memberships } = loaderDataOf(await parentMatchPromise)
+    if (memberships.length > 0) throw redirect({ to: '/app' })
+  },
+  head: () => ({ meta: [{ title: 'Create your organisation' }] }),
+  component: lazyRouteComponent(() => import('./pages/onboarding-page'), 'OnboardingPage'),
+})
+
+// ---------------------------------------------------------------------------
+// Tenant app: everything under /app happens inside one active organisation
+// ---------------------------------------------------------------------------
+
+// Pathless layout: requires at least one membership and resolves the active organisation
+// (the profile's remembered choice, else the first). Children read `org`, `role` and
+// `memberships` from this route's loader data.
+const appRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  id: '_app',
+  loader: async ({ parentMatchPromise }) => {
+    const { profile, memberships } = loaderDataOf(await parentMatchPromise)
+
+    if (memberships.length === 0) throw redirect({ to: '/onboarding' })
+
+    const active =
+      memberships.find((membership) => membership.org_id === profile?.active_org_id) ??
+      memberships[0]!
+
+    return { memberships, org: active.organisation, role: active.role }
+  },
+  staleTime: Infinity,
   // The marketing page stays in the main chunk; everything behind the guard (including the
-  // shell) is split out so a visitor never downloads the dashboard.
+  // shell) is split out so a visitor never downloads the app.
   component: lazyRouteComponent(() => import('@/components/layout/app-shell'), 'AppShell'),
 })
 
 const dashboardRoute = createRoute({
-  getParentRoute: () => authenticatedRoute,
-  path: '/dashboard',
+  getParentRoute: () => appRoute,
+  path: '/app',
   head: () => ({ meta: [{ title: 'Dashboard' }] }),
   component: lazyRouteComponent(() => import('./pages/dashboard-page'), 'DashboardPage'),
 })
 
+const orgSettingsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/app/settings',
+  head: () => ({ meta: [{ title: 'Organisation settings' }] }),
+  component: lazyRouteComponent(() => import('./pages/org-settings-page'), 'OrgSettingsPage'),
+})
+
+const newOrganisationRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/app/organisations/new',
+  head: () => ({ meta: [{ title: 'New organisation' }] }),
+  component: lazyRouteComponent(
+    () => import('./pages/new-organisation-page'),
+    'NewOrganisationPage',
+  ),
+})
+
 const profileRoute = createRoute({
-  getParentRoute: () => authenticatedRoute,
-  path: '/profile',
+  getParentRoute: () => appRoute,
+  path: '/app/profile',
   head: () => ({ meta: [{ title: 'Profile' }] }),
   component: lazyRouteComponent(() => import('./pages/profile-page'), 'ProfilePage'),
 })
@@ -170,7 +240,10 @@ const routeTree = rootRoute.addChildren([
   loginRoute,
   signUpRoute,
   resetPasswordRoute,
-  authenticatedRoute.addChildren([dashboardRoute, profileRoute]),
+  authenticatedRoute.addChildren([
+    onboardingRoute,
+    appRoute.addChildren([dashboardRoute, orgSettingsRoute, newOrganisationRoute, profileRoute]),
+  ]),
 ])
 
 // Factory so tests can build a router on a memory history; the app uses the default instance.
@@ -180,6 +253,10 @@ export const createAppRouter = (options: { history?: RouterHistory } = {}) =>
     history: options.history,
     // Fetch a lazy route's chunk when a link to it is hovered or focused.
     defaultPreload: 'intent',
+    // Loaders here use `staleTime: Infinity` and refresh only via `router.invalidate()`, i.e.
+    // when data has changed and guards must see it. The default 'background' mode would hand
+    // child loaders (and `parentMatchPromise`) the stale data first.
+    defaultStaleReloadMode: 'blocking',
     defaultPendingComponent: RoutePending,
     defaultErrorComponent: RouteError,
     defaultNotFoundComponent: RouteNotFound,

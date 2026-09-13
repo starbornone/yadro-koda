@@ -20,6 +20,11 @@ vi.mock('./pages/profile-page', () => ({ ProfilePage: () => <div>profile page</d
 vi.mock('./pages/reset-password-page', () => ({
   ResetPasswordPage: () => <div>reset page</div>,
 }))
+vi.mock('./pages/onboarding-page', () => ({ OnboardingPage: () => <div>onboarding page</div> }))
+vi.mock('./pages/org-settings-page', () => ({ OrgSettingsPage: () => <div>settings page</div> }))
+vi.mock('./pages/new-organisation-page', () => ({
+  NewOrganisationPage: () => <div>new org page</div>,
+}))
 
 const fakeStore = vi.hoisted(() => {
   const listeners = new Set<() => void>()
@@ -46,6 +51,16 @@ vi.mock('@/lib/auth/auth-store', () => ({ authStore: fakeStore.authStore }))
 const getMyProfile = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/supabase/profiles', () => ({ getMyProfile }))
 
+const getMyMemberships = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/supabase/organisations', () => ({ getMyMemberships }))
+
+const membership = (orgId: string, role = 'owner') => ({
+  org_id: orgId,
+  role,
+  expires_at: null,
+  organisation: { id: orgId, name: `Org ${orgId}`, slug: orgId, created_at: '' },
+})
+
 const signedIn: AuthState = {
   status: 'signed-in',
   session: { access_token: 'token', user: { id: 'user-1' } } as unknown as Session,
@@ -62,7 +77,10 @@ const renderAt = (path: string) => {
 }
 
 beforeEach(() => {
-  getMyProfile.mockReset().mockResolvedValue({ id: 'user-1', display_name: 'Ada' })
+  getMyProfile
+    .mockReset()
+    .mockResolvedValue({ id: 'user-1', display_name: 'Ada', active_org_id: null })
+  getMyMemberships.mockReset().mockResolvedValue([membership('org-1')])
 })
 
 describe('public site', () => {
@@ -96,11 +114,11 @@ describe('signed out', () => {
   })
 
   it('redirects protected routes to /login and remembers where the user was going', async () => {
-    const router = renderAt('/profile')
+    const router = renderAt('/app/profile')
 
     expect(await screen.findByText('auth page')).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/login')
-    expect(router.state.location.search).toEqual({ redirect: '/profile' })
+    expect(router.state.location.search).toEqual({ redirect: '/app/profile' })
     expect(getMyProfile).not.toHaveBeenCalled()
   })
 
@@ -115,33 +133,35 @@ describe('signed out', () => {
 describe('signed in', () => {
   beforeEach(() => fakeStore.set(signedIn))
 
-  it('sends /login and /signup to the dashboard', async () => {
+  it('sends /login and /signup into the app', async () => {
     const login = renderAt('/login')
     expect(await screen.findByText('dashboard page')).toBeInTheDocument()
-    expect(login.state.location.pathname).toBe('/dashboard')
+    expect(login.state.location.pathname).toBe('/app')
 
     const signup = renderAt('/signup')
-    await waitFor(() => expect(signup.state.location.pathname).toBe('/dashboard'))
+    await waitFor(() => expect(signup.state.location.pathname).toBe('/app'))
   })
 
   it('honours a same-origin redirect target', async () => {
-    const router = renderAt('/login?redirect=/profile')
+    const router = renderAt('/login?redirect=/app/profile')
 
     expect(await screen.findByText('profile page')).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/profile')
+    expect(router.state.location.pathname).toBe('/app/profile')
   })
 
-  it('loads the profile once for the authenticated layout', async () => {
-    renderAt('/dashboard')
+  it('loads the profile and memberships once for the authenticated layout', async () => {
+    renderAt('/app')
 
     await screen.findByText('dashboard page')
     expect(getMyProfile).toHaveBeenCalledTimes(1)
     expect(getMyProfile).toHaveBeenCalledWith('user-1')
+    expect(getMyMemberships).toHaveBeenCalledTimes(1)
+    expect(getMyMemberships).toHaveBeenCalledWith('user-1')
   })
 
   it('shows the error boundary when the profile fails to load, and can retry', async () => {
     getMyProfile.mockRejectedValueOnce(new Error('permission denied'))
-    renderAt('/dashboard')
+    renderAt('/app')
 
     expect(await screen.findByRole('heading', { name: 'Something went wrong' })).toBeInTheDocument()
     expect(screen.getByText('permission denied')).toBeInTheDocument()
@@ -160,6 +180,82 @@ describe('signed in', () => {
   })
 })
 
+describe('organisations', () => {
+  beforeEach(() => fakeStore.set(signedIn))
+
+  it('sends a user with no organisation to onboarding', async () => {
+    getMyMemberships.mockResolvedValue([])
+    const router = renderAt('/app')
+
+    expect(await screen.findByText('onboarding page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/onboarding')
+  })
+
+  it('keeps a user with an organisation out of onboarding', async () => {
+    const router = renderAt('/onboarding')
+
+    expect(await screen.findByText('dashboard page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/app')
+  })
+
+  it('lets a user with an organisation create another one', async () => {
+    const router = renderAt('/app/organisations/new')
+
+    expect(await screen.findByText('new org page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/app/organisations/new')
+  })
+
+  it('moves into the app once an organisation exists, on invalidate', async () => {
+    getMyMemberships.mockResolvedValue([])
+    const router = renderAt('/app')
+    await screen.findByText('onboarding page')
+
+    // What creating an organisation does: fresh data, then invalidate.
+    getMyMemberships.mockResolvedValue([membership('org-1')])
+    await router.invalidate()
+
+    expect(await screen.findByText('dashboard page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/app')
+  })
+
+  it('re-resolves the active organisation on invalidate', async () => {
+    getMyMemberships.mockResolvedValue([membership('org-1'), membership('org-2', 'member')])
+    const router = renderAt('/app')
+    await screen.findByText('dashboard page')
+    const appMatch = () =>
+      router.state.matches.find((match) => match.routeId === '/_authenticated/_app')
+    expect(appMatch()?.loaderData).toMatchObject({ org: { id: 'org-1' } })
+
+    // What switching does: the profile now remembers org-2, then invalidate.
+    getMyProfile.mockResolvedValue({ id: 'user-1', active_org_id: 'org-2' })
+    await router.invalidate()
+
+    await waitFor(() =>
+      expect(appMatch()?.loaderData).toMatchObject({ org: { id: 'org-2' }, role: 'member' }),
+    )
+  })
+
+  it('makes the remembered organisation active', async () => {
+    getMyProfile.mockResolvedValue({ id: 'user-1', active_org_id: 'org-2' })
+    getMyMemberships.mockResolvedValue([membership('org-1'), membership('org-2', 'member')])
+    const router = renderAt('/app')
+
+    await screen.findByText('dashboard page')
+    const app = router.state.matches.find((match) => match.routeId === '/_authenticated/_app')
+    expect(app?.loaderData).toMatchObject({ org: { id: 'org-2' }, role: 'member' })
+  })
+
+  it('falls back to the first organisation when the remembered one is gone', async () => {
+    getMyProfile.mockResolvedValue({ id: 'user-1', active_org_id: 'org-gone' })
+    getMyMemberships.mockResolvedValue([membership('org-1'), membership('org-2')])
+    const router = renderAt('/app')
+
+    await screen.findByText('dashboard page')
+    const app = router.state.matches.find((match) => match.routeId === '/_authenticated/_app')
+    expect(app?.loaderData).toMatchObject({ org: { id: 'org-1' }, role: 'owner' })
+  })
+})
+
 describe('password recovery', () => {
   it('sends a recovery session from /login to the reset page', async () => {
     fakeStore.set(inRecovery)
@@ -171,7 +267,7 @@ describe('password recovery', () => {
 
   it('keeps a recovery session out of the app until the password is set', async () => {
     fakeStore.set(inRecovery)
-    const router = renderAt('/dashboard')
+    const router = renderAt('/app')
 
     expect(await screen.findByText('reset page')).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/reset-password')
@@ -187,7 +283,7 @@ describe('password recovery', () => {
     // USER_UPDATED clears the flag in the real store; the page then links to the dashboard.
     fakeStore.set(signedIn)
     await waitFor(() => expect(router.state.location.pathname).toBe('/reset-password'))
-    await router.navigate({ to: '/dashboard' })
+    await router.navigate({ to: '/app' })
 
     expect(await screen.findByText('dashboard page')).toBeInTheDocument()
     stopSyncing()
@@ -229,27 +325,27 @@ describe('password recovery', () => {
 describe('session changes while on a page', () => {
   it('kicks the user back to /login when they sign out', async () => {
     fakeStore.set(signedIn)
-    const router = renderAt('/dashboard')
+    const router = renderAt('/app')
     const stopSyncing = syncRouterWithAuth(router)
     await screen.findByText('dashboard page')
 
     fakeStore.set(signedOut)
 
     expect(await screen.findByText('auth page')).toBeInTheDocument()
-    await waitFor(() => expect(router.state.location.search).toEqual({ redirect: '/dashboard' }))
+    await waitFor(() => expect(router.state.location.search).toEqual({ redirect: '/app' }))
     stopSyncing()
   })
 
   it('moves the user off /login when they sign in', async () => {
     fakeStore.set(signedOut)
-    const router = renderAt('/login?redirect=/profile')
+    const router = renderAt('/login?redirect=/app/profile')
     const stopSyncing = syncRouterWithAuth(router)
     await screen.findByText('auth page')
 
     fakeStore.set(signedIn)
 
     expect(await screen.findByText('profile page')).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/profile')
+    expect(router.state.location.pathname).toBe('/app/profile')
     stopSyncing()
   })
 })
