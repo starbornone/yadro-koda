@@ -29,6 +29,7 @@ const profile: Profile = {
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
   last_sign_in_at: null,
+  active_org_id: null,
 }
 
 beforeEach(() => {

@@ -3,7 +3,7 @@ import { supabase } from './supabase'
 /**
  * Mirrors `public.profiles` (see supabase/migrations). Rows are created and the auth-mirrored
  * columns (`email`, `phone`, `provider`, `providers`, `last_sign_in_at`) are maintained by
- * database triggers; clients may only update `display_name` and `phone`.
+ * database triggers; clients may only update `display_name`, `phone` and `active_org_id`.
  */
 export type Profile = {
   id: string
@@ -15,6 +15,8 @@ export type Profile = {
   created_at: string
   updated_at: string
   last_sign_in_at: string | null
+  /** The organisation the user last worked in; the app falls back to their first membership. */
+  active_org_id: string | null
 }
 
 // RLS already scopes these queries to the caller; the explicit `id` filter is defence in depth
