@@ -60,7 +60,7 @@ const SetNewPassword = () => {
             <AlertDescription>You&apos;re signed in with your new password.</AlertDescription>
           </Alert>
           <Button asChild>
-            <Link to="/dashboard">Continue to dashboard</Link>
+            <Link to="/app">Continue to dashboard</Link>
           </Button>
         </div>
       </AuthLayout>

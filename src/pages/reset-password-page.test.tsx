@@ -88,7 +88,7 @@ describe('ResetPasswordPage', () => {
     expect(await screen.findByText('Password updated')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Continue to dashboard' })).toHaveAttribute(
       'href',
-      '/dashboard',
+      '/app',
     )
   })
 
