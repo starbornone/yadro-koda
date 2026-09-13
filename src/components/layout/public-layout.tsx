@@ -22,7 +22,7 @@ const AuthActions = () => {
   if (auth.status === 'signed-in') {
     return (
       <Button asChild size="sm">
-        <Link to="/dashboard">Dashboard</Link>
+        <Link to="/app">Dashboard</Link>
       </Button>
     )
   }
