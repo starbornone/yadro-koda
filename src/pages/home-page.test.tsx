@@ -90,10 +90,10 @@ describe('HomePage', () => {
     renderHome()
 
     await screen.findByRole('heading', { level: 1 })
-    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/dashboard')
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/app')
     expect(screen.getByRole('link', { name: homeContent.hero.signedInCta })).toHaveAttribute(
       'href',
-      '/dashboard',
+      '/app',
     )
     expect(screen.queryByRole('link', { name: 'Sign in' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /get started/i })).not.toBeInTheDocument()

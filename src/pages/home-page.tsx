@@ -25,7 +25,7 @@ const Hero = ({ signedIn }: { signedIn: boolean }) => {
       <div className="flex flex-wrap items-center justify-center gap-3">
         {signedIn ? (
           <Button asChild size="lg">
-            <Link to="/dashboard">
+            <Link to="/app">
               {hero.signedInCta}
               <ArrowRightIcon data-icon="inline-end" />
             </Link>
@@ -83,7 +83,7 @@ const CallToAction = ({ signedIn }: { signedIn: boolean }) => {
         <h2 className="text-3xl font-semibold tracking-tight">{cta.heading}</h2>
         <p className="text-muted-foreground">{cta.subhead}</p>
         <Button asChild size="lg">
-          <Link to={signedIn ? '/dashboard' : '/signup'}>
+          <Link to={signedIn ? '/app' : '/signup'}>
             {signedIn ? cta.signedInButton : cta.button}
           </Link>
         </Button>
