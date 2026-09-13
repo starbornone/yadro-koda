@@ -16,6 +16,7 @@ const profile = (overrides: Partial<Profile> = {}): Profile => ({
   created_at: '',
   updated_at: '',
   last_sign_in_at: null,
+  active_org_id: null,
   ...overrides,
 })
 
