@@ -24,7 +24,7 @@ describe('ProfilePage', () => {
     expect(screen.getByLabelText('Phone')).toHaveValue('')
     expect(screen.getByText('ada@example.com')).toBeInTheDocument()
     expect(screen.getByText('email')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/dashboard')
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/app')
   })
 
   it('falls back gracefully when there is no profile row yet', async () => {
