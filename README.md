@@ -48,6 +48,9 @@ and column grants so clients can only write the fields they own.
 | `pnpm lint:fix`     | ESLint with autofix                       |
 | `pnpm format`       | Prettier, write                           |
 | `pnpm format:check` | Prettier, check only                      |
+| `pnpm test`         | Vitest, single run                        |
+| `pnpm test:watch`   | Vitest in watch mode                      |
+| `pnpm db:check`     | Parse the SQL schema (no database needed) |
 
 ## Project layout
 
@@ -62,22 +65,24 @@ src/
   config/site.ts        # Site-wide constants (title)
   lib/
     utils.ts            # cn() helper
-    auth/               # Session store, route APIs (_authenticated, _app), permissions matrix
+    auth/               # Session store, route APIs (_authenticated, _app, _staff), permissions
+    format.ts           # Date formatting
     theme/              # Theme store: light / dark / system, persisted, applied to <html>
-    supabase/           # Supabase client, profile and organisation queries
+    supabase/           # Supabase client; profile, organisation and platform queries
   features/
     auth/               # Auth layout, login / sign-up / reset forms and hooks
     organisations/      # Create-organisation form, organisation settings hook
+    staff/              # Staff team page hook
     marketing/          # Placeholder copy for the public site (content.ts)
     profile/            # Profile, change-password and account sections + page hook
-  pages/                # Route components
+  pages/                # Route components (staff/ for the staff area)
   components/
     ui/                 # shadcn primitives (generated; edit sparingly)
-    layout/             # PublicLayout (marketing header/footer), AppShell (sidebars),
+    layout/             # PublicLayout (marketing), AppShell + StaffShell (sidebars),
                         # PageHeader (breadcrumbs)
     theme/              # ThemeToggle dropdown
     router/             # Pending / error / not-found screens used by the router
-    sidebar/            # App sidebar composition
+    sidebar/            # App and staff sidebar composition
     navigation/         # Nav items, organisation switcher, user menu
   hooks/                # Shared hooks (useIsMobile)
   test/setup.ts         # Vitest setup: jest-dom matchers, jsdom stubs
@@ -100,29 +105,50 @@ Path alias: `@/` → `src/`.
 | `/app/settings`          | signed in + member  | Organisation settings (owners/admins can edit)         |
 | `/app/organisations/new` | signed in + member  | Create another organisation                            |
 | `/app/profile`           | signed in + member  | Profile, password, account, sign-out                   |
+| `/staff`                 | staff               | Overview: counts across every organisation             |
+| `/staff/organisations`   | staff               | All organisations, searchable (`?q=`); detail per org  |
+| `/staff/team`            | staff               | Platform members; admins change roles and remove       |
 
 Every route sets its `<title>` via TanStack's `head()`; the home page also sets a meta
 description. Marketing copy is placeholder and lives in `src/features/marketing/content.ts`.
 
 ## Organisations and roles
 
-Every product object belongs to an **organisation**; users join through `memberships` with an
-`org_role` (`owner` | `admin` | `member` — generic names a product renames). A second, separate
-layer — `platform_members` with a `platform_role` — marks the company's own staff; its UI comes
-later, but tenant RLS already routes staff access through one function,
-`platform_can_access_org()`, so it can be narrowed in one place.
+There are two layers of users, each with its own roles, routes and shell:
+
+- **Tenants.** Every product object belongs to an **organisation**; users join through
+  `memberships` with an `org_role` (`owner` | `admin` | `member` — generic names a product
+  renames). They live under `/app/*`.
+- **Staff.** The company's own people have a `platform_members` row with a `platform_role`
+  (`admin` | `support`) and live under `/staff/*`, looking across every tenant. Staff never
+  self-sign-up. Tenant RLS reaches staff through one function, `platform_can_access_org()`, so
+  staff reach can be narrowed in one place; in the boilerplate it is read-only over tenants, and
+  only platform admins can change staff roles or remove staff (the database refuses to remove the
+  last admin). Colleagues can see each other's profiles (`shares_org_with()`); staff can see
+  everyone's.
+
+Both layers hang off the `_authenticated` route, whose loader fetches `profile`, `memberships`
+and `platformRole` once. A user with no organisation goes to `/onboarding` — or to `/staff` if
+they are staff. Staff who also belong to an organisation land in `/app` and get a link across;
+non-staff who open `/staff` are sent to `/app`.
 
 - `create_organisation()` (RPC) is the only way to make an organisation: it inserts the row,
   makes the caller its owner and marks it active, atomically.
-- The `_authenticated` route loads `profile` + `memberships` once; the `_app` layout beneath it
-  reads them through `parentMatchPromise`, redirects to `/onboarding` when there are none, and
-  resolves the active organisation (`profiles.active_org_id`, else the first membership) into its
-  loader data as `{ org, role, memberships }`. Pages reach it via `appRoute.useLoaderData()`.
+- The `_authenticated` route loads `profile`, `memberships` and `platformRole` once. The `_app`
+  layout beneath it reads them through `parentMatchPromise`, redirects when there are no
+  memberships, and resolves the active organisation (`profiles.active_org_id`, else the first
+  membership) into its loader data as `{ org, role, memberships }`; `_staff` does the same for
+  `{ platformRole, hasOrganisations }`. Pages reach these via `appRoute` / `staffRoute`
+  (`getRouteApi`).
+- **Guards that need data live in loaders, and child loaders must wait for them.** Loaders run
+  in parallel, so a page loader under `_staff` calls `guardedBy(parentMatchPromise)` before
+  fetching — otherwise its request would go out even when the guard redirects.
 - Switching organisations writes `active_org_id` and calls `router.invalidate()`. The router runs
   reloads in **blocking** mode (`defaultStaleReloadMode`) so child loaders always see fresh parent
   data after an invalidate.
-- `canInOrg(role, action)` in `src/lib/auth/permissions.ts` decides what the UI shows; RLS
-  decides what the database allows. Both must agree; the database wins.
+- `canInOrg(role, action)` and `canOnPlatform(role, action)` in `src/lib/auth/permissions.ts`
+  decide what the UI shows; RLS decides what the database allows. Both must agree; the database
+  wins.
 - `memberships.expires_at` supports time-boxed access (e.g. an external reviewer) — RLS ignores
   expired memberships.
 
