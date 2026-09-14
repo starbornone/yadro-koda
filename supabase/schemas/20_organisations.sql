@@ -5,7 +5,7 @@
 --   * Platform layer — a user with a `platform_members` row is staff. Staff reach tenant rows
 --     only through `platform_can_access_org()`, one named function that every tenant policy
 --     calls, so a product can later narrow staff access (e.g. to assigned organisations) in one
---     place. The platform UI and write policies are defined with the staff layer.
+--     place. Platform admins manage staff roles here; adding staff is by invitation (later).
 --
 -- Roles are deliberately generic; a product renames or extends the enums.
 
@@ -150,6 +150,26 @@ as $$
   select public.is_platform_member();
 $$;
 
+-- True when the caller and `target_user` are both current members of at least one common
+-- organisation. Lets colleagues see each other's profiles without exposing anyone else's.
+create or replace function public.shares_org_with(target_user uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.memberships mine
+    join public.memberships theirs on theirs.org_id = mine.org_id
+    where mine.user_id = (select auth.uid())
+      and theirs.user_id = target_user
+      and (mine.expires_at is null or mine.expires_at > now())
+      and (theirs.expires_at is null or theirs.expires_at > now())
+  );
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Row-level security
 -- ---------------------------------------------------------------------------
@@ -162,7 +182,10 @@ revoke all on table public.organisations, public.memberships, public.platform_me
 -- Rows are created through create_organisation(); direct inserts/deletes come with the
 -- invitation and member-management work.
 revoke insert, delete on table public.organisations, public.memberships from authenticated;
-revoke insert, update, delete on table public.platform_members from authenticated;
+-- Staff are added by invitation (later); platform admins may change roles and remove staff.
+revoke insert on table public.platform_members from authenticated;
+revoke update on table public.platform_members from authenticated;
+grant update (role) on table public.platform_members to authenticated;
 
 create policy "organisations_select_member_or_staff"
   on public.organisations
@@ -192,6 +215,49 @@ create policy "platform_members_select_self_or_admin"
   for select
   to authenticated
   using (user_id = (select auth.uid()) or public.platform_role() = 'admin');
+
+create policy "platform_members_update_admin"
+  on public.platform_members
+  for update
+  to authenticated
+  using (public.platform_role() = 'admin')
+  with check (public.platform_role() = 'admin');
+
+create policy "platform_members_delete_admin"
+  on public.platform_members
+  for delete
+  to authenticated
+  using (public.platform_role() = 'admin');
+
+-- A platform with no admin cannot be administered. Refuse the change that would cause it.
+create or replace function public.protect_last_platform_admin()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if old.role = 'admin'
+     and (tg_op = 'DELETE' or new.role <> 'admin')
+     and (select count(*) from public.platform_members where role = 'admin') <= 1 then
+    raise exception 'cannot remove the last platform admin'
+      using errcode = 'check_violation';
+  end if;
+  return coalesce(new, old);
+end;
+$$;
+
+create trigger platform_members_protect_last_admin
+  before update of role or delete on public.platform_members
+  for each row execute function public.protect_last_platform_admin();
+
+-- Colleagues can see each other's profiles; staff can see everyone's. Combined with
+-- profiles_select_own (10_profiles.sql), since policies are OR-ed.
+create policy "profiles_select_shared_org_or_staff"
+  on public.profiles
+  for select
+  to authenticated
+  using (public.shares_org_with(id) or public.is_platform_member());
 
 -- profiles.active_org_id is user-editable (granted in 10_profiles.sql) but must point at one of
 -- the user's organisations.

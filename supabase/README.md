@@ -4,11 +4,11 @@ The database schema is **declared**, not migrated: `schemas/` describes the desi
 one file per concern, applied in filename order. There is no migration history because there is
 no database yet — history starts when a product creates one.
 
-| File                           | Declares                                                                                                                                  |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `schemas/00_helpers.sql`       | `set_updated_at()` trigger function                                                                                                       |
-| `schemas/10_profiles.sql`      | `profiles` mirrored from `auth.users` by triggers; RLS; column grants                                                                     |
-| `schemas/20_organisations.sql` | `organisations`, `memberships` (`org_role`, `expires_at`), `platform_members` (`platform_role`), RLS helpers, `create_organisation()` RPC |
+| File                           | Declares                                                                                                                                                                                                 |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schemas/00_helpers.sql`       | `set_updated_at()` trigger function                                                                                                                                                                      |
+| `schemas/10_profiles.sql`      | `profiles` mirrored from `auth.users` by triggers; RLS; column grants                                                                                                                                    |
+| `schemas/20_organisations.sql` | `organisations`, `memberships` (`org_role`, `expires_at`), `platform_members` (`platform_role`, admin-managed, last admin protected), RLS helpers incl. `shares_org_with()`, `create_organisation()` RPC |
 
 Two access layers are modelled: tenant membership (`is_org_member`, `org_role`, `has_org_role`)
 and platform staff (`is_platform_member`, `platform_role`). Tenant policies reach staff through
