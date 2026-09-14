@@ -3,6 +3,7 @@ import {
   createRoute,
   createRouter,
   lazyRouteComponent,
+  notFound,
   redirect,
   type RouterHistory,
 } from '@tanstack/react-router'
@@ -12,6 +13,13 @@ import { RouteError, RouteNotFound, RoutePending } from '@/components/router/rou
 import { authStore } from '@/lib/auth/auth-store'
 import { readResetLinkError } from '@/lib/auth/password-reset'
 import { getMyMemberships } from '@/lib/supabase/organisations'
+import {
+  getMyPlatformRole,
+  getOrganisation,
+  getPlatformOverview,
+  listOrganisations,
+  listPlatformMembers,
+} from '@/lib/supabase/platform'
 import { getMyProfile } from '@/lib/supabase/profiles'
 import { homeContent } from '@/features/marketing/content'
 import { HomePage } from './pages/home-page'
@@ -144,11 +152,12 @@ const authenticatedRoute = createRoute({
     return { user: auth.user }
   },
   loader: async ({ context }) => {
-    const [profile, memberships] = await Promise.all([
+    const [profile, memberships, platformRole] = await Promise.all([
       getMyProfile(context.user.id),
       getMyMemberships(context.user.id),
+      getMyPlatformRole(context.user.id),
     ])
-    return { profile, memberships }
+    return { profile, memberships, platformRole }
   },
   // These only change through this app; refetch on explicit `router.invalidate()`, not on
   // every navigation.
@@ -164,6 +173,12 @@ const loaderDataOf = <T,>(match: { loaderData?: T; error?: unknown }): T => {
   }
   return match.loaderData
 }
+
+// Loaders run in parallel by default, so a child under a guard layout must wait for the guard
+// before fetching anything — otherwise its request goes out even when the parent redirects.
+// Rethrows the parent's redirect/error; returns its data.
+const guardedBy = async <T,>(parentMatchPromise: Promise<{ loaderData?: T; error?: unknown }>) =>
+  loaderDataOf(await parentMatchPromise)
 
 // A signed-in user with no organisation yet. Once they have one, this sends them into the app.
 const onboardingRoute = createRoute({
@@ -188,9 +203,13 @@ const appRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   id: '_app',
   loader: async ({ parentMatchPromise }) => {
-    const { profile, memberships } = loaderDataOf(await parentMatchPromise)
+    const { profile, memberships, platformRole } = loaderDataOf(await parentMatchPromise)
 
-    if (memberships.length === 0) throw redirect({ to: '/onboarding' })
+    // Nowhere to go inside the tenant app: staff have their own home, everyone else needs an
+    // organisation first.
+    if (memberships.length === 0) {
+      throw redirect({ to: platformRole ? '/staff' : '/onboarding' })
+    }
 
     const active =
       memberships.find((membership) => membership.org_id === profile?.active_org_id) ??
@@ -235,6 +254,85 @@ const profileRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/profile-page'), 'ProfilePage'),
 })
 
+// ---------------------------------------------------------------------------
+// Staff area: the platform's own people, looking across every tenant
+// ---------------------------------------------------------------------------
+
+// Pathless layout: requires a platform role. A non-staff user who lands here is sent to their
+// own app — it is the wrong door, not a missing page.
+const staffRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  id: '_staff',
+  loader: async ({ parentMatchPromise }) => {
+    const { platformRole, memberships } = loaderDataOf(await parentMatchPromise)
+
+    if (!platformRole) throw redirect({ to: '/app' })
+
+    return { platformRole, hasOrganisations: memberships.length > 0 }
+  },
+  staleTime: Infinity,
+  component: lazyRouteComponent(() => import('@/components/layout/staff-shell'), 'StaffShell'),
+})
+
+const staffOverviewRoute = createRoute({
+  getParentRoute: () => staffRoute,
+  path: '/staff',
+  loader: async ({ parentMatchPromise }) => {
+    await guardedBy(parentMatchPromise)
+    return getPlatformOverview()
+  },
+  head: () => ({ meta: [{ title: 'Staff' }] }),
+  component: lazyRouteComponent(
+    () => import('./pages/staff/staff-overview-page'),
+    'StaffOverviewPage',
+  ),
+})
+
+const staffOrganisationsRoute = createRoute({
+  getParentRoute: () => staffRoute,
+  path: '/staff/organisations',
+  validateSearch: (search: Record<string, unknown>): { q?: string } => ({
+    q: typeof search.q === 'string' && search.q.trim() ? search.q : undefined,
+  }),
+  loaderDeps: ({ search }) => ({ q: search.q ?? '' }),
+  loader: async ({ deps, parentMatchPromise }) => {
+    await guardedBy(parentMatchPromise)
+    return listOrganisations(deps.q)
+  },
+  head: () => ({ meta: [{ title: 'Organisations' }] }),
+  component: lazyRouteComponent(
+    () => import('./pages/staff/staff-organisations-page'),
+    'StaffOrganisationsPage',
+  ),
+})
+
+const staffOrganisationRoute = createRoute({
+  getParentRoute: () => staffRoute,
+  path: '/staff/organisations/$orgId',
+  loader: async ({ params, parentMatchPromise }) => {
+    await guardedBy(parentMatchPromise)
+    const organisation = await getOrganisation(params.orgId)
+    if (!organisation) throw notFound()
+    return organisation
+  },
+  head: ({ loaderData }) => ({ meta: [{ title: loaderData?.name ?? 'Organisation' }] }),
+  component: lazyRouteComponent(
+    () => import('./pages/staff/staff-organisation-page'),
+    'StaffOrganisationPage',
+  ),
+})
+
+const staffTeamRoute = createRoute({
+  getParentRoute: () => staffRoute,
+  path: '/staff/team',
+  loader: async ({ parentMatchPromise }) => {
+    await guardedBy(parentMatchPromise)
+    return listPlatformMembers()
+  },
+  head: () => ({ meta: [{ title: 'Team' }] }),
+  component: lazyRouteComponent(() => import('./pages/staff/staff-team-page'), 'StaffTeamPage'),
+})
+
 const routeTree = rootRoute.addChildren([
   publicRoute.addChildren([homeRoute]),
   loginRoute,
@@ -243,6 +341,12 @@ const routeTree = rootRoute.addChildren([
   authenticatedRoute.addChildren([
     onboardingRoute,
     appRoute.addChildren([dashboardRoute, orgSettingsRoute, newOrganisationRoute, profileRoute]),
+    staffRoute.addChildren([
+      staffOverviewRoute,
+      staffOrganisationsRoute,
+      staffOrganisationRoute,
+      staffTeamRoute,
+    ]),
   ]),
 ])
 

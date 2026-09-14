@@ -25,6 +25,17 @@ vi.mock('./pages/org-settings-page', () => ({ OrgSettingsPage: () => <div>settin
 vi.mock('./pages/new-organisation-page', () => ({
   NewOrganisationPage: () => <div>new org page</div>,
 }))
+vi.mock('@/components/layout/staff-shell', () => ({ StaffShell: () => <Outlet /> }))
+vi.mock('./pages/staff/staff-overview-page', () => ({
+  StaffOverviewPage: () => <div>staff overview</div>,
+}))
+vi.mock('./pages/staff/staff-organisations-page', () => ({
+  StaffOrganisationsPage: () => <div>staff organisations</div>,
+}))
+vi.mock('./pages/staff/staff-organisation-page', () => ({
+  StaffOrganisationPage: () => <div>staff organisation</div>,
+}))
+vi.mock('./pages/staff/staff-team-page', () => ({ StaffTeamPage: () => <div>staff team</div> }))
 
 const fakeStore = vi.hoisted(() => {
   const listeners = new Set<() => void>()
@@ -54,6 +65,15 @@ vi.mock('@/lib/supabase/profiles', () => ({ getMyProfile }))
 const getMyMemberships = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/supabase/organisations', () => ({ getMyMemberships }))
 
+const platform = vi.hoisted(() => ({
+  getMyPlatformRole: vi.fn(),
+  getPlatformOverview: vi.fn(),
+  listOrganisations: vi.fn(),
+  getOrganisation: vi.fn(),
+  listPlatformMembers: vi.fn(),
+}))
+vi.mock('@/lib/supabase/platform', () => platform)
+
 const membership = (orgId: string, role = 'owner') => ({
   org_id: orgId,
   role,
@@ -81,6 +101,13 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ id: 'user-1', display_name: 'Ada', active_org_id: null })
   getMyMemberships.mockReset().mockResolvedValue([membership('org-1')])
+  platform.getMyPlatformRole.mockReset().mockResolvedValue(null)
+  platform.getPlatformOverview
+    .mockReset()
+    .mockResolvedValue({ organisations: 1, memberships: 1, staff: 1 })
+  platform.listOrganisations.mockReset().mockResolvedValue([])
+  platform.getOrganisation.mockReset().mockResolvedValue(null)
+  platform.listPlatformMembers.mockReset().mockResolvedValue([])
 })
 
 describe('public site', () => {
@@ -253,6 +280,51 @@ describe('organisations', () => {
     await screen.findByText('dashboard page')
     const app = router.state.matches.find((match) => match.routeId === '/_authenticated/_app')
     expect(app?.loaderData).toMatchObject({ org: { id: 'org-1' }, role: 'owner' })
+  })
+})
+
+describe('staff', () => {
+  beforeEach(() => fakeStore.set(signedIn))
+
+  it('sends staff with no organisation to the staff area instead of onboarding', async () => {
+    getMyMemberships.mockResolvedValue([])
+    platform.getMyPlatformRole.mockResolvedValue('support')
+    const router = renderAt('/app')
+
+    expect(await screen.findByText('staff overview')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/staff')
+  })
+
+  it('keeps staff who also belong to an organisation in their app by default', async () => {
+    platform.getMyPlatformRole.mockResolvedValue('admin')
+    const router = renderAt('/app')
+
+    expect(await screen.findByText('dashboard page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/app')
+  })
+
+  it('sends non-staff who open /staff to their app', async () => {
+    const router = renderAt('/staff/team')
+
+    expect(await screen.findByText('dashboard page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/app')
+    expect(platform.listPlatformMembers).not.toHaveBeenCalled()
+  })
+
+  it('serves the staff pages to staff', async () => {
+    platform.getMyPlatformRole.mockResolvedValue('support')
+    renderAt('/staff/organisations?q=acme')
+
+    expect(await screen.findByText('staff organisations')).toBeInTheDocument()
+    expect(platform.listOrganisations).toHaveBeenCalledWith('acme')
+  })
+
+  it('renders not-found for an organisation that does not exist', async () => {
+    platform.getMyPlatformRole.mockResolvedValue('support')
+    renderAt('/staff/organisations/nope')
+
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
+    expect(platform.getOrganisation).toHaveBeenCalledWith('nope')
   })
 })
 
