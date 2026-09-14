@@ -1,21 +1,10 @@
 import type { User } from '@supabase/supabase-js'
+import { formatDate, formatDateTime } from '@/lib/format'
 import type { Profile } from '@/lib/supabase/profiles'
 
 type AccountDetailsProps = {
   user: User
   profile: Profile | null
-}
-
-const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' })
-const dateTimeFormat = new Intl.DateTimeFormat(undefined, {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-})
-
-const formatDate = (iso: string | null | undefined, formatter: Intl.DateTimeFormat) => {
-  if (!iso) return '—'
-  const date = new Date(iso)
-  return Number.isNaN(date.getTime()) ? '—' : formatter.format(date)
 }
 
 const providerLabel = (providers: string[] | null | undefined, fallback: string | null) => {
@@ -28,8 +17,8 @@ export function AccountDetails({ user, profile }: AccountDetailsProps) {
   const rows: Array<[label: string, value: string]> = [
     ['Email', profile?.email || user.email || '—'],
     ['Signed in with', providerLabel(profile?.providers, profile?.provider ?? null)],
-    ['Member since', formatDate(profile?.created_at ?? user.created_at, dateFormat)],
-    ['Last sign-in', formatDate(profile?.last_sign_in_at ?? user.last_sign_in_at, dateTimeFormat)],
+    ['Member since', formatDate(profile?.created_at ?? user.created_at)],
+    ['Last sign-in', formatDateTime(profile?.last_sign_in_at ?? user.last_sign_in_at)],
   ]
 
   return (
