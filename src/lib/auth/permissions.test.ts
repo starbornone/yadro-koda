@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canInOrg } from './permissions'
+import { canInOrg, canOnPlatform } from './permissions'
 
 describe('canInOrg', () => {
   it('lets owners and admins manage the organisation', () => {
@@ -11,5 +11,13 @@ describe('canInOrg', () => {
   it('reserves deletion for owners', () => {
     expect(canInOrg('owner', 'org:delete')).toBe(true)
     expect(canInOrg('admin', 'org:delete')).toBe(false)
+  })
+})
+
+describe('canOnPlatform', () => {
+  it('lets every staff role view organisations, only admins manage the team', () => {
+    expect(canOnPlatform('support', 'platform:view-organisations')).toBe(true)
+    expect(canOnPlatform('support', 'platform:manage-team')).toBe(false)
+    expect(canOnPlatform('admin', 'platform:manage-team')).toBe(true)
   })
 })
