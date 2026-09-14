@@ -6,6 +6,8 @@ export type NavMainItem = {
   icon: React.ReactNode
   /** Route to navigate to. Items without one render as inert buttons until they have a page. */
   to?: LinkProps['to']
+  /** Highlight for any descendant route too (section roots). Default: exact match only. */
+  fuzzy?: boolean
 }
 
 export function NavMain({ items }: { items: NavMainItem[] }) {
@@ -16,7 +18,10 @@ export function NavMain({ items }: { items: NavMainItem[] }) {
       {items.map((item) => (
         <SidebarMenuItem key={item.title}>
           {item.to ? (
-            <SidebarMenuButton asChild isActive={Boolean(matchRoute({ to: item.to }))}>
+            <SidebarMenuButton
+              asChild
+              isActive={Boolean(matchRoute({ to: item.to, fuzzy: item.fuzzy }))}
+            >
               <Link to={item.to}>
                 {item.icon}
                 <span>{item.title}</span>

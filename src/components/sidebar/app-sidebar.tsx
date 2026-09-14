@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { LayoutDashboardIcon, Settings2Icon } from 'lucide-react'
+import { LayoutDashboardIcon, Settings2Icon, ShieldIcon } from 'lucide-react'
 import { NavMain, type NavMainItem } from '@/components/navigation/nav-main'
 import { NavUser } from '@/components/navigation/nav-user'
 import { OrgSwitcher } from '@/components/navigation/org-switcher'
@@ -8,6 +8,7 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarRail,
 } from '@/components/ui/sidebar'
@@ -22,7 +23,7 @@ const navMain: NavMainItem[] = [
 /** Tenant-app sidebar: active organisation, navigation, signed-in user. */
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const { user } = authenticatedRoute.useRouteContext()
-  const { profile } = authenticatedRoute.useLoaderData()
+  const { profile, platformRole } = authenticatedRoute.useLoaderData()
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -33,6 +34,12 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         <SidebarGroup>
           <NavMain items={navMain} />
         </SidebarGroup>
+        {platformRole ? (
+          <SidebarGroup>
+            <SidebarGroupLabel>Elsewhere</SidebarGroupLabel>
+            <NavMain items={[{ title: 'Staff area', icon: <ShieldIcon />, to: '/staff' }]} />
+          </SidebarGroup>
+        ) : null}
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={resolveDisplayUser(user, profile)} />
