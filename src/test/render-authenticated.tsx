@@ -10,6 +10,7 @@ import {
 import type { User } from '@supabase/supabase-js'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import type { Membership, OrgRole, Organisation } from '@/lib/supabase/organisations'
+import type { PlatformRole } from '@/lib/supabase/platform'
 import type { Profile } from '@/lib/supabase/profiles'
 
 export const testUser = {
@@ -54,6 +55,23 @@ type RenderOptions = {
   memberships?: Membership[]
   org?: Organisation
   role?: OrgRole
+  platformRole?: PlatformRole | null
+}
+
+const authenticatedLayout = ({
+  user = testUser,
+  profile = testProfile,
+  memberships = [testMembership],
+  platformRole = null,
+}: RenderOptions) => {
+  const rootRoute = createRootRoute()
+  const authenticatedRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    id: '_authenticated',
+    beforeLoad: () => ({ user }),
+    loader: () => ({ profile, memberships, platformRole }),
+  })
+  return { rootRoute, authenticatedRoute }
 }
 
 /**
@@ -63,23 +81,9 @@ type RenderOptions = {
  * a `SidebarProvider` as the app shell would. The page renders once the loaders settle; await a
  * `findBy…` query for its content.
  */
-export const renderAuthenticated = (
-  ui: ReactNode,
-  {
-    user = testUser,
-    profile = testProfile,
-    memberships = [testMembership],
-    org = testOrg,
-    role = 'owner',
-  }: RenderOptions = {},
-) => {
-  const rootRoute = createRootRoute()
-  const authenticatedRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    id: '_authenticated',
-    beforeLoad: () => ({ user }),
-    loader: () => ({ profile, memberships }),
-  })
+export const renderAuthenticated = (ui: ReactNode, options: RenderOptions = {}) => {
+  const { memberships = [testMembership], org = testOrg, role = 'owner' } = options
+  const { rootRoute, authenticatedRoute } = authenticatedLayout(options)
   const appRoute = createRoute({
     getParentRoute: () => authenticatedRoute,
     id: '_app',
@@ -95,6 +99,52 @@ export const renderAuthenticated = (
       authenticatedRoute.addChildren([appRoute.addChildren([pageRoute])]),
     ]),
     history: createMemoryHistory({ initialEntries: ['/page'] }),
+  })
+
+  return { ...render(<RouterProvider router={router} />), router }
+}
+
+type StaffRenderOptions = RenderOptions & {
+  /** The page's own route path, e.g. `/staff/team` or `/staff/organisations/$orgId`. */
+  path: string
+  /** The URL to open; defaults to `path`. Needed when the path has params. */
+  url?: string
+  /** What the page's own loader would have returned. */
+  loaderData?: unknown
+}
+
+/**
+ * Like `renderAuthenticated`, but mirrors the `_authenticated` → `_staff` chain and mounts
+ * `ui` at a real staff route path so `getRouteApi('/_authenticated/_staff/…')` resolves.
+ */
+export const renderStaff = (ui: ReactNode, options: StaffRenderOptions) => {
+  const {
+    path,
+    url = path,
+    loaderData,
+    memberships = [testMembership],
+    platformRole = 'admin',
+  } = options
+  const { rootRoute, authenticatedRoute } = authenticatedLayout({ ...options, platformRole })
+  const staffRoute = createRoute({
+    getParentRoute: () => authenticatedRoute,
+    id: '_staff',
+    loader: () => ({
+      platformRole: platformRole ?? 'admin',
+      hasOrganisations: memberships.length > 0,
+    }),
+  })
+  const pageRoute = createRoute({
+    getParentRoute: () => staffRoute,
+    path,
+    loader: () => loaderData,
+    component: () => <SidebarProvider>{ui}</SidebarProvider>,
+  })
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([
+      authenticatedRoute.addChildren([staffRoute.addChildren([pageRoute])]),
+    ]),
+    history: createMemoryHistory({ initialEntries: [url] }),
   })
 
   return { ...render(<RouterProvider router={router} />), router }
