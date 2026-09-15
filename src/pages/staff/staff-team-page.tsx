@@ -33,14 +33,21 @@ import { PLATFORM_ROLE_LABELS } from '@/lib/auth/permissions'
 import { formatDate } from '@/lib/format'
 import type { PlatformMember, PlatformRole } from '@/lib/supabase/platform'
 
-const ROLES = Object.keys(PLATFORM_ROLE_LABELS) as PlatformRole[]
-
 const memberName = (member: PlatformMember) =>
   member.profile.display_name?.trim() || member.profile.email || 'Unnamed'
 
 export const StaffTeamPage = () => {
-  const { members, currentUserId, canManage, busyUserId, error, changeRole, remove } =
-    useStaffTeamPage()
+  const {
+    members,
+    currentUserId,
+    canManage,
+    canManageMember,
+    assignableRoles,
+    busyUserId,
+    error,
+    changeRole,
+    remove,
+  } = useStaffTeamPage()
 
   return (
     <>
@@ -75,6 +82,7 @@ export const StaffTeamPage = () => {
             <TableBody>
               {members.map((member) => {
                 const isSelf = member.user_id === currentUserId
+                const editable = canManageMember(member)
                 const busy = busyUserId === member.user_id
                 const name = memberName(member)
 
@@ -90,7 +98,7 @@ export const StaffTeamPage = () => {
                       {member.profile.email ?? '—'}
                     </TableCell>
                     <TableCell>
-                      {canManage && !isSelf ? (
+                      {editable ? (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -110,7 +118,7 @@ export const StaffTeamPage = () => {
                                 void changeRole(member.user_id, value as PlatformRole)
                               }
                             >
-                              {ROLES.map((role) => (
+                              {assignableRoles.map((role) => (
                                 <DropdownMenuRadioItem key={role} value={role}>
                                   {PLATFORM_ROLE_LABELS[role]}
                                 </DropdownMenuRadioItem>
@@ -127,7 +135,7 @@ export const StaffTeamPage = () => {
                     </TableCell>
                     {canManage ? (
                       <TableCell>
-                        {isSelf ? null : (
+                        {!editable ? null : (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button

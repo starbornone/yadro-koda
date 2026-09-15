@@ -17,6 +17,12 @@ vi.mock('@/lib/supabase/supabase', () => ({ supabase: {} }))
 
 const members: PlatformMember[] = [
   {
+    user_id: 'user-0',
+    role: 'superadmin',
+    created_at: '2025-12-01T00:00:00Z',
+    profile: { id: 'user-0', display_name: 'Linus', email: 'linus@example.com' },
+  },
+  {
     user_id: 'user-1',
     role: 'admin',
     created_at: '2026-01-01T00:00:00Z',
@@ -30,7 +36,7 @@ const members: PlatformMember[] = [
   },
 ]
 
-const renderPage = (platformRole: 'admin' | 'support' = 'admin') =>
+const renderPage = (platformRole: 'superadmin' | 'admin' | 'support' = 'admin') =>
   renderStaff(<StaffTeamPage />, { path: '/staff/team', loaderData: members, platformRole })
 
 beforeEach(() => {
@@ -58,6 +64,31 @@ describe('StaffTeamPage', () => {
 
     expect(platform.updatePlatformMemberRole).toHaveBeenCalledWith('user-2', 'admin')
     await waitFor(() => expect(invalidate).toHaveBeenCalled())
+  })
+
+  it('never lets an admin reach a superadmin, or offer the superadmin role', async () => {
+    const user = userEvent.setup()
+    renderPage('admin')
+
+    await screen.findByText('Linus')
+    expect(screen.queryByRole('button', { name: 'Change role for Linus' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Remove Linus' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Change role for Grace' }))
+    expect(await screen.findByRole('menuitemradio', { name: 'Admin' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitemradio', { name: 'Superadmin' })).not.toBeInTheDocument()
+  })
+
+  it('lets a superadmin manage everyone and assign any role', async () => {
+    const user = userEvent.setup()
+    renderPage('superadmin')
+
+    // user-1 is the current user in the harness; Linus is another superadmin.
+    expect(await screen.findByRole('button', { name: 'Change role for Linus' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove Linus' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Change role for Grace' }))
+    expect(await screen.findByRole('menuitemradio', { name: 'Superadmin' })).toBeInTheDocument()
   })
 
   it('asks before removing, then removes', async () => {
