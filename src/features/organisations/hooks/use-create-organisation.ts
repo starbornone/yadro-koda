@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useRouter } from '@tanstack/react-router'
-import { createOrganisation, slugify } from '@/lib/supabase/organisations'
+import { createOrganisation, normaliseSlugInput, slugify } from '@/lib/supabase/organisations'
 
 /**
  * Create-organisation form state. On success the new organisation is already active (the RPC
@@ -21,18 +21,9 @@ export const useCreateOrganisation = () => {
     if (!slugEdited) setSlugValue(slugify(value))
   }
 
-  // Light normalisation while typing: a trailing hyphen must survive so "acme-" can become
-  // "acme-co". Full `slugify` runs on submit.
   const setSlug = (value: string) => {
     setSlugEdited(true)
-    setSlugValue(
-      value
-        .toLowerCase()
-        .replace(/[^a-z0-9-]+/g, '-')
-        .replace(/-{2,}/g, '-')
-        .replace(/^-/, '')
-        .slice(0, 50),
-    )
+    setSlugValue(normaliseSlugInput(value))
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -47,7 +38,7 @@ export const useCreateOrganisation = () => {
       await router.invalidate()
       await navigate({ to: '/app' })
     } catch (createError) {
-      setError(describeError(createError))
+      setError(describeCreateError(createError))
     } finally {
       setLoading(false)
     }
@@ -56,7 +47,8 @@ export const useCreateOrganisation = () => {
   return { name, slug, loading, error, setName, setSlug, handleSubmit }
 }
 
-const describeError = (error: unknown) => {
+/** Turns the database's constraint names into something a person can act on. */
+export const describeCreateError = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error)
   if (/organisations_slug_key|duplicate key/.test(message)) {
     return 'That URL name is already taken. Choose another.'
