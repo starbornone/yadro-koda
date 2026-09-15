@@ -94,6 +94,18 @@ export const setActiveOrganisation = async (userId: string, orgId: string): Prom
   }
 }
 
+/**
+ * Light normalisation of a slug while it is being typed: a trailing hyphen must survive so
+ * "acme-" can become "acme-co". Run `slugify` on submit.
+ */
+export const normaliseSlugInput = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-/, '')
+    .slice(0, 50)
+
 /** URL-safe identifier from a display name: "Acme & Co." → "acme-co". */
 export const slugify = (name: string) =>
   name
