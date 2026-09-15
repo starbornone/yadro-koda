@@ -2,8 +2,8 @@
 
 A React single-page app boilerplate for organisation-based (multi-tenant) products: a public
 marketing site, Supabase authentication (email/password sign-up, login, password reset and
-change), user profiles, organisations with role-based memberships, and an app shell with an
-organisation switcher.
+change), user profiles, organisations with role-based memberships, an app shell with an
+organisation switcher, and a staff area that doubles as a CRM over every organisation.
 
 ## Stack
 
@@ -34,7 +34,8 @@ The schema is declared in [`supabase/schemas`](supabase/schemas) — see
 [`supabase/README.md`](supabase/README.md) for how to apply it. In short: a `public.profiles`
 table kept in sync with `auth.users` by triggers; `organisations`, `memberships` and
 `platform_members` with RLS helpers (`is_org_member`, `has_org_role`, `platform_can_access_org`);
-and column grants so clients can only write the fields they own.
+the staff-only CRM tables (`customers`, `contacts`, `activities`, `tasks`); and column grants so
+clients can only write the fields they own.
 
 ## Scripts
 
@@ -68,16 +69,19 @@ src/
     auth/               # Session store, route APIs (_authenticated, _app, _staff), permissions
     format.ts           # Date formatting
     theme/              # Theme store: light / dark / system, persisted, applied to <html>
-    supabase/           # Supabase client; profile, organisation and platform queries
+    supabase/           # Supabase client; profile, organisation, platform and CRM queries
   features/
     auth/               # Auth layout, login / sign-up / reset forms and hooks
     organisations/      # Create-organisation form, organisation settings hook
-    staff/              # Staff team page hook
+    staff/              # Staff team and organisation page hooks
+    crm/                # Customer record sections (pipeline, contacts, activity, tasks), stages
+    accounts/           # Account chooser hook
     marketing/          # Placeholder copy for the public site (content.ts)
     profile/            # Profile, change-password and account sections + page hook
   pages/                # Route components (staff/ for the staff area)
   components/
     ui/                 # shadcn primitives (generated; edit sparingly)
+    confirm-button.tsx  # Button that asks before an irreversible action
     layout/             # PublicLayout (marketing), AppShell + StaffShell (sidebars),
                         # PageHeader (breadcrumbs)
     theme/              # ThemeToggle dropdown
@@ -97,17 +101,20 @@ Path alias: `@/` → `src/`.
 | Path                     | Who                 | What                                                   |
 | ------------------------ | ------------------- | ------------------------------------------------------ |
 | `/`                      | everyone            | Marketing home; signed-in visitors get a Dashboard CTA |
-| `/login`                 | signed out          | Sign in (`?redirect=` honoured); signed in → dashboard |
-| `/signup`                | signed out          | Create account; signed in → dashboard                  |
+| `/login`                 | signed out          | Sign in (`?redirect=` honoured); signed in → /accounts |
+| `/signup`                | signed out          | Create account; signed in → /accounts                  |
 | `/reset-password`        | from the email link | Set a new password, or request a fresh link            |
+| `/accounts`              | signed in           | Choose where to go: staff area or an organisation      |
 | `/onboarding`            | signed in, no org   | Create your first organisation                         |
 | `/app`                   | signed in + member  | Dashboard, inside the active organisation              |
 | `/app/settings`          | signed in + member  | Organisation settings (owners/admins can edit)         |
 | `/app/organisations/new` | signed in + member  | Create another organisation                            |
 | `/app/profile`           | signed in + member  | Profile, password, account, sign-out                   |
-| `/staff`                 | staff               | Overview: counts across every organisation             |
-| `/staff/organisations`   | staff               | All organisations, searchable (`?q=`); detail per org  |
-| `/staff/team`            | staff               | Platform members; admins change roles and remove       |
+| `/staff`                 | staff               | Overview: counts, pipeline by stage, your open tasks   |
+| `/staff/organisations`   | staff               | Every organisation (`?q=`, `?stage=`); `new` for leads |
+| `/staff/organisations/…` | staff               | Customer record: pipeline, contacts, tasks, activity   |
+| `/staff/team`            | staff               | Platform members; admins and up change roles / remove  |
+| `/staff/profile`         | staff               | The profile page, inside the staff shell               |
 
 Every route sets its `<title>` via TanStack's `head()`; the home page also sets a meta
 description. Marketing copy is placeholder and lives in `src/features/marketing/content.ts`.
@@ -119,18 +126,27 @@ There are two layers of users, each with its own roles, routes and shell:
 - **Tenants.** Every product object belongs to an **organisation**; users join through
   `memberships` with an `org_role` (`owner` | `admin` | `member` — generic names a product
   renames). They live under `/app/*`.
-- **Staff.** The company's own people have a `platform_members` row with a `platform_role`
-  (`admin` | `support`) and live under `/staff/*`, looking across every tenant. Staff never
-  self-sign-up. Tenant RLS reaches staff through one function, `platform_can_access_org()`, so
-  staff reach can be narrowed in one place; in the boilerplate it is read-only over tenants, and
-  only platform admins can change staff roles or remove staff (the database refuses to remove the
-  last admin). Colleagues can see each other's profiles (`shares_org_with()`); staff can see
-  everyone's.
+- **Staff.** The company's own people have a `platform_members` row with a `platform_role` and
+  live under `/staff/*`, looking across every tenant. Staff never self-sign-up. Three tiers:
+  - `superadmin` — full access: every tenant read **and write**, and the whole staff team.
+  - `admin` — reads tenants; manages staff below superadmin.
+  - `support` — reads tenants.
+
+  Tenant RLS reaches staff through two functions, so staff reach can be narrowed in one place:
+  `platform_can_access_org()` (read, every tier) and `platform_can_manage_org()` (write,
+  superadmin only). Staff-team writes go through `platform_can_manage_member()`, which never lets
+  anyone act above their own tier, and the database refuses to remove the last superadmin.
+  Colleagues can see each other's profiles (`shares_org_with()`); staff can see everyone's.
+
+**One person, several accounts.** The same sign-in can be staff _and_ a member of organisations
+— it is one `auth.users` row with a `platform_members` row and memberships, so nothing is
+blocked by email. After sign-in, `/accounts` decides where to go: exactly one place → straight
+there (`/app`, `/staff`, or `/onboarding` when there is nothing yet); several → a chooser listing
+the staff area and each organisation with the user's role in it. "Switch account" in the user menu
+returns to it, and each shell links across to the other.
 
 Both layers hang off the `_authenticated` route, whose loader fetches `profile`, `memberships`
-and `platformRole` once. A user with no organisation goes to `/onboarding` — or to `/staff` if
-they are staff. Staff who also belong to an organisation land in `/app` and get a link across;
-non-staff who open `/staff` are sent to `/app`.
+and `platformRole` once. Non-staff who open `/staff` are sent to `/app`.
 
 - `create_organisation()` (RPC) is the only way to make an organisation: it inserts the row,
   makes the caller its owner and marks it active, atomically.
@@ -151,6 +167,32 @@ non-staff who open `/staff` are sent to `/app`.
   wins.
 - `memberships.expires_at` supports time-boxed access (e.g. an external reviewer) — RLS ignores
   expired memberships.
+
+## CRM
+
+The staff area is a CRM over the organisations table. **An organisation is the customer record
+for its whole life**: staff enter it as a lead (no users yet), and the same row becomes the
+tenant when its first person joins — nothing is copied between a "lead" and a "customer". What
+staff know about it lives in tables tenants cannot read (`supabase/schemas/30_crm.sql`):
+
+- `customers` — one row per organisation, created by trigger: `stage` (`lead` → `qualified` →
+  `trial` → `active`, or `churned` / `lost` — a generic funnel a product renames), `owner_id`
+  (the responsible staff member) and `source`. A self-serve sign-up starts at `trial`;
+  `create_lead()` starts at `lead`, owned by whoever entered it. Every stage change is logged to
+  the timeline by trigger.
+- `contacts` — people at the customer, whether or not they have a sign-in; one primary per
+  organisation. `user_id` is the slot for linking a contact to their account (invitations).
+- `activities` — the timeline: notes, calls, emails, meetings, stage changes.
+- `tasks` — follow-ups with a due date and a staff assignee; the overview lists yours.
+
+Every staff tier reads all of it and logs activity; moving the pipeline (stage, owner, source,
+new leads) needs `platform:manage-customers` — superadmin and admin — enforced in SQL by
+`platform_can_manage_customers()`. Removing someone else's contact, entry or task also needs it.
+The organisations list is the pipeline view (`?stage=`), the overview shows counts per stage, and
+each organisation's page is its customer record. Data access is in `src/lib/supabase/crm.ts`;
+the page sections are in `src/features/crm/`. Each write goes through `useCrmAction`, which runs
+one action at a time and `router.invalidate()`s afterwards so the page re-renders from the
+database rather than optimistic state.
 
 ## Auth flow
 
