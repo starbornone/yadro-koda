@@ -7,7 +7,12 @@ import { ChangePasswordForm } from '@/features/profile/components/change-passwor
 import { ProfileForm } from '@/features/profile/components/profile-form'
 import { useProfilePage } from '@/features/profile/hooks/use-profile-page'
 
-export const ProfilePage = () => {
+type ProfilePageProps = {
+  /** Where the breadcrumb leads back to: the tenant dashboard or the staff overview. */
+  home?: { label: string; to: '/app' | '/staff' }
+}
+
+export const ProfilePage = ({ home = { label: 'Dashboard', to: '/app' } }: ProfilePageProps) => {
   const {
     user,
     profile,
@@ -27,7 +32,7 @@ export const ProfilePage = () => {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Dashboard', to: '/app' }, { label: 'Profile' }]} />
+      <PageHeader crumbs={[home, { label: 'Profile' }]} />
       <div className="flex flex-1 flex-col gap-8 p-4 md:p-6">
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-8">
           <ProfileForm
@@ -78,3 +83,5 @@ export const ProfilePage = () => {
     </>
   )
 }
+
+export const StaffProfilePage = () => <ProfilePage home={{ label: 'Staff', to: '/staff' }} />
