@@ -49,25 +49,72 @@ describe('listOrganisations', () => {
     query.builder.order.mockReturnValue(query.builder)
     query.builder.or.mockResolvedValue({
       data: [
-        { id: 'org-1', name: 'Acme', slug: 'acme', created_at: '', memberships: [{ count: 3 }] },
+        {
+          id: 'org-1',
+          name: 'Acme',
+          slug: 'acme',
+          created_at: '',
+          memberships: [{ count: 3 }],
+          customers: {
+            stage: 'active',
+            owner: {
+              user_id: 'user-2',
+              profile: { id: 'user-2', display_name: 'Linus', email: null },
+            },
+          },
+        },
+        {
+          id: 'org-2',
+          name: 'Globex',
+          slug: 'globex',
+          created_at: '',
+          memberships: [],
+          customers: { stage: 'lead', owner: null },
+        },
       ],
       error: null,
     })
 
-    const result = await listOrganisations('  ac%me ')
+    const result = await listOrganisations({ search: '  ac%me ' })
 
     expect(query.builder.select).toHaveBeenCalledWith(expect.stringContaining('memberships(count)'))
+    expect(query.builder.select).toHaveBeenCalledWith(expect.stringContaining('customers!inner('))
     expect(query.builder.or).toHaveBeenCalledWith('name.ilike.%ac\\%me%,slug.ilike.%ac\\%me%')
     expect(result).toEqual([
-      { id: 'org-1', name: 'Acme', slug: 'acme', created_at: '', member_count: 3 },
+      {
+        id: 'org-1',
+        name: 'Acme',
+        slug: 'acme',
+        created_at: '',
+        member_count: 3,
+        stage: 'active',
+        owner: { id: 'user-2', display_name: 'Linus', email: null },
+      },
+      {
+        id: 'org-2',
+        name: 'Globex',
+        slug: 'globex',
+        created_at: '',
+        member_count: 0,
+        stage: 'lead',
+        owner: null,
+      },
     ])
   })
 
   it('skips the filter when the search is blank', async () => {
     query.builder.order.mockResolvedValue({ data: [], error: null })
 
-    await expect(listOrganisations('   ')).resolves.toEqual([])
+    await expect(listOrganisations({ search: '   ' })).resolves.toEqual([])
     expect(query.builder.or).not.toHaveBeenCalled()
+  })
+
+  it('filters on the embedded stage', async () => {
+    query.builder.order.mockReturnValue(query.builder)
+    query.builder.eq.mockResolvedValue({ data: [], error: null })
+
+    await expect(listOrganisations({ stage: 'trial' })).resolves.toEqual([])
+    expect(query.builder.eq).toHaveBeenCalledWith('customers.stage', 'trial')
   })
 })
 

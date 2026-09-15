@@ -1,7 +1,8 @@
+import type { CustomerStage } from './crm'
 import type { OrgRole, Organisation } from './organisations'
 import { supabase } from './supabase'
 
-export type PlatformRole = 'admin' | 'support'
+export type PlatformRole = 'superadmin' | 'admin' | 'support'
 
 /** The subset of a colleague's profile other people may see. */
 export type PublicProfile = {
@@ -17,8 +18,11 @@ export type PlatformMember = {
   profile: PublicProfile
 }
 
+/** An organisation in the staff list: the tenant plus its CRM stage and account manager. */
 export type OrganisationSummary = Organisation & {
   member_count: number
+  stage: CustomerStage
+  owner: PublicProfile | null
 }
 
 export type OrganisationMember = {
@@ -58,15 +62,31 @@ export const getMyPlatformRole = async (userId: string): Promise<PlatformRole | 
 // Staff views over tenants. RLS lets staff read every organisation and membership.
 // ---------------------------------------------------------------------------
 
-export const listOrganisations = async (search = ''): Promise<OrganisationSummary[]> => {
+export type ListOrganisationsOptions = {
+  /** Matches name or slug, case-insensitively. */
+  search?: string
+  /** Only organisations at this CRM stage. */
+  stage?: CustomerStage
+}
+
+export const listOrganisations = async ({
+  search = '',
+  stage,
+}: ListOrganisationsOptions = {}): Promise<OrganisationSummary[]> => {
+  // `!inner` so the stage filter applies (every organisation has a customers row, by trigger).
   let query = supabase
     .from('organisations')
-    .select('id, name, slug, created_at, memberships(count)')
+    .select(
+      'id, name, slug, created_at, memberships(count), customers!inner(stage, owner:platform_members(user_id, profile:profiles(id, display_name, email)))',
+    )
     .order('created_at', { ascending: false })
 
   const term = search.trim()
   if (term) {
     query = query.or(`name.ilike.%${escapeLike(term)}%,slug.ilike.%${escapeLike(term)}%`)
+  }
+  if (stage) {
+    query = query.eq('customers.stage', stage)
   }
 
   const { data, error } = await query
@@ -75,10 +95,15 @@ export const listOrganisations = async (search = ''): Promise<OrganisationSummar
     throw error
   }
 
-  type Row = Organisation & { memberships: Array<{ count: number }> }
-  return ((data ?? []) as unknown as Row[]).map(({ memberships, ...organisation }) => ({
+  type Row = Organisation & {
+    memberships: Array<{ count: number }>
+    customers: { stage: CustomerStage; owner: { profile: PublicProfile } | null }
+  }
+  return ((data ?? []) as unknown as Row[]).map(({ memberships, customers, ...organisation }) => ({
     ...organisation,
     member_count: memberships[0]?.count ?? 0,
+    stage: customers.stage,
+    owner: customers.owner?.profile ?? null,
   }))
 }
 
