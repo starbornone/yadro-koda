@@ -1,11 +1,16 @@
 import { useCallback, useState } from 'react'
 import { getRouteApi, useRouter } from '@tanstack/react-router'
 import { authenticatedRoute } from '@/lib/auth/authenticated-route'
-import { canOnPlatform } from '@/lib/auth/permissions'
+import {
+  assignablePlatformRoles,
+  canManagePlatformMember,
+  canOnPlatform,
+} from '@/lib/auth/permissions'
 import { staffRoute } from '@/lib/auth/staff-route'
 import {
   removePlatformMember,
   updatePlatformMemberRole,
+  type PlatformMember,
   type PlatformRole,
 } from '@/lib/supabase/platform'
 
@@ -20,6 +25,13 @@ export const useStaffTeamPage = () => {
   const [error, setError] = useState<string | null>(null)
 
   const canManage = canOnPlatform(platformRole, 'platform:manage-team')
+
+  /** Whether the current user may change or remove this row — never their own. */
+  const canManageMember = useCallback(
+    (member: PlatformMember) =>
+      member.user_id !== user.id && canManagePlatformMember(platformRole, member.role),
+    [platformRole, user.id],
+  )
 
   const run = useCallback(
     async (userId: string, action: () => Promise<void>) => {
@@ -56,6 +68,8 @@ export const useStaffTeamPage = () => {
     members,
     currentUserId: user.id,
     canManage,
+    canManageMember,
+    assignableRoles: assignablePlatformRoles(platformRole),
     busyUserId,
     error,
     changeRole,
