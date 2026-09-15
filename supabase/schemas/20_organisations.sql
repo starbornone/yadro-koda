@@ -3,14 +3,22 @@
 --
 --   * Tenant layer — a user belongs to organisations through `memberships`, with an `org_role`.
 --   * Platform layer — a user with a `platform_members` row is staff. Staff reach tenant rows
---     only through `platform_can_access_org()`, one named function that every tenant policy
---     calls, so a product can later narrow staff access (e.g. to assigned organisations) in one
---     place. Platform admins manage staff roles here; adding staff is by invitation (later).
+--     only through two named functions that every tenant policy calls, so a product can narrow
+--     staff access (e.g. to assigned organisations) in one place:
+--       platform_can_access_org()  — read:  every staff role
+--       platform_can_manage_org()  — write: superadmin only
+--     Adding staff is by invitation (later).
+--
+-- One person may be both staff and an organisation member — the same auth.users row carries a
+-- platform_members row and memberships. The app offers an account chooser between them.
 --
 -- Roles are deliberately generic; a product renames or extends the enums.
+--   org_role:      owner > admin > member
+--   platform_role: superadmin (full access to everything) > admin (manages staff below
+--                  superadmin, reads tenants) > support (reads tenants)
 
 create type public.org_role as enum ('owner', 'admin', 'member');
-create type public.platform_role as enum ('admin', 'support');
+create type public.platform_role as enum ('superadmin', 'admin', 'support');
 
 -- ---------------------------------------------------------------------------
 -- Tables
@@ -138,7 +146,7 @@ as $$
   select public.platform_role() is not null;
 $$;
 
--- The single gate for staff reaching tenant data. Broad for now (any staff role can read any
+-- The read gate for staff reaching tenant data. Broad for now (any staff role can read any
 -- organisation); narrow it here when the product needs assignment-based access.
 create or replace function public.platform_can_access_org(target_org uuid)
 returns boolean
@@ -148,6 +156,32 @@ security definer
 set search_path = ''
 as $$
   select public.is_platform_member();
+$$;
+
+-- The write gate: only the full-access tier may change tenant data on a tenant's behalf.
+create or replace function public.platform_can_manage_org(target_org uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select public.platform_role() = 'superadmin';
+$$;
+
+-- Who may change or remove a staff row: superadmins anyone, admins anyone below superadmin.
+create or replace function public.platform_can_manage_member(target_role public.platform_role)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select case public.platform_role()
+    when 'superadmin' then true
+    when 'admin' then target_role <> 'superadmin'
+    else false
+  end;
 $$;
 
 -- True when the caller and `target_user` are both current members of at least one common
@@ -179,10 +213,10 @@ alter table public.memberships enable row level security;
 alter table public.platform_members enable row level security;
 
 revoke all on table public.organisations, public.memberships, public.platform_members from anon;
--- Rows are created through create_organisation(); direct inserts/deletes come with the
--- invitation and member-management work.
+-- Rows are created through create_organisation() and create_lead() (30_crm.sql); direct
+-- inserts/deletes come with the invitation and member-management work.
 revoke insert, delete on table public.organisations, public.memberships from authenticated;
--- Staff are added by invitation (later); platform admins may change roles and remove staff.
+-- Staff are added by invitation (later); the tiers above a row may change or remove it.
 revoke insert on table public.platform_members from authenticated;
 revoke update on table public.platform_members from authenticated;
 grant update (role) on table public.platform_members to authenticated;
@@ -193,12 +227,18 @@ create policy "organisations_select_member_or_staff"
   to authenticated
   using (public.is_org_member(id) or public.platform_can_access_org(id));
 
-create policy "organisations_update_owner_admin"
+create policy "organisations_update_owner_admin_or_superadmin"
   on public.organisations
   for update
   to authenticated
-  using (public.has_org_role(id, array['owner', 'admin']::public.org_role[]))
-  with check (public.has_org_role(id, array['owner', 'admin']::public.org_role[]));
+  using (
+    public.has_org_role(id, array['owner', 'admin']::public.org_role[])
+    or public.platform_can_manage_org(id)
+  )
+  with check (
+    public.has_org_role(id, array['owner', 'admin']::public.org_role[])
+    or public.platform_can_manage_org(id)
+  );
 
 -- Members can only change the organisation's name; the slug is fixed at creation for now.
 revoke update on table public.organisations from authenticated;
@@ -210,46 +250,49 @@ create policy "memberships_select_same_org_or_staff"
   to authenticated
   using (public.is_org_member(org_id) or public.platform_can_access_org(org_id));
 
-create policy "platform_members_select_self_or_admin"
+-- Every staff member can see the team; only the tiers above a row may change or remove it,
+-- and nobody may promote past their own tier.
+create policy "platform_members_select_staff"
   on public.platform_members
   for select
   to authenticated
-  using (user_id = (select auth.uid()) or public.platform_role() = 'admin');
+  using (public.is_platform_member());
 
-create policy "platform_members_update_admin"
+create policy "platform_members_update_by_tier"
   on public.platform_members
   for update
   to authenticated
-  using (public.platform_role() = 'admin')
-  with check (public.platform_role() = 'admin');
+  using (public.platform_can_manage_member(role))
+  with check (public.platform_can_manage_member(role));
 
-create policy "platform_members_delete_admin"
+create policy "platform_members_delete_by_tier"
   on public.platform_members
   for delete
   to authenticated
-  using (public.platform_role() = 'admin');
+  using (public.platform_can_manage_member(role));
 
--- A platform with no admin cannot be administered. Refuse the change that would cause it.
-create or replace function public.protect_last_platform_admin()
+-- A platform with no superadmin cannot be fully administered. Refuse the change that would
+-- cause it.
+create or replace function public.protect_last_superadmin()
 returns trigger
 language plpgsql
 security definer
 set search_path = ''
 as $$
 begin
-  if old.role = 'admin'
-     and (tg_op = 'DELETE' or new.role <> 'admin')
-     and (select count(*) from public.platform_members where role = 'admin') <= 1 then
-    raise exception 'cannot remove the last platform admin'
+  if old.role = 'superadmin'
+     and (tg_op = 'DELETE' or new.role <> 'superadmin')
+     and (select count(*) from public.platform_members where role = 'superadmin') <= 1 then
+    raise exception 'cannot remove the last superadmin'
       using errcode = 'check_violation';
   end if;
   return coalesce(new, old);
 end;
 $$;
 
-create trigger platform_members_protect_last_admin
+create trigger platform_members_protect_last_superadmin
   before update of role or delete on public.platform_members
-  for each row execute function public.protect_last_platform_admin();
+  for each row execute function public.protect_last_superadmin();
 
 -- Colleagues can see each other's profiles; staff can see everyone's. Combined with
 -- profiles_select_own (10_profiles.sql), since policies are OR-ed.
@@ -284,8 +327,9 @@ create trigger profiles_validate_active_org
   for each row execute function public.validate_active_org();
 
 -- ---------------------------------------------------------------------------
--- create_organisation(): the only way to make an organisation. Creates it, makes the caller
--- its owner and marks it active — atomically, so there is never an orphaned organisation.
+-- create_organisation(): how a user makes their own organisation. Creates it, makes the caller
+-- its owner and marks it active — atomically. (Staff enter organisations that have no users
+-- yet through create_lead() in 30_crm.sql.)
 -- ---------------------------------------------------------------------------
 
 create or replace function public.create_organisation(name text, slug text)
