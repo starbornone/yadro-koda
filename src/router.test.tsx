@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Outlet, RouterProvider, createMemoryHistory } from '@tanstack/react-router'
 import type { Session } from '@supabase/supabase-js'
@@ -16,7 +16,10 @@ vi.mock('./pages/auth-page', () => ({
   SignUpPage: () => <div>sign-up page</div>,
 }))
 vi.mock('./pages/dashboard-page', () => ({ DashboardPage: () => <div>dashboard page</div> }))
-vi.mock('./pages/profile-page', () => ({ ProfilePage: () => <div>profile page</div> }))
+vi.mock('./pages/profile-page', () => ({
+  ProfilePage: () => <div>profile page</div>,
+  StaffProfilePage: () => <div>profile page</div>,
+}))
 vi.mock('./pages/reset-password-page', () => ({
   ResetPasswordPage: () => <div>reset page</div>,
 }))
@@ -36,6 +39,10 @@ vi.mock('./pages/staff/staff-organisation-page', () => ({
   StaffOrganisationPage: () => <div>staff organisation</div>,
 }))
 vi.mock('./pages/staff/staff-team-page', () => ({ StaffTeamPage: () => <div>staff team</div> }))
+vi.mock('./pages/staff/staff-new-organisation-page', () => ({
+  StaffNewOrganisationPage: () => <div>staff new organisation</div>,
+}))
+vi.mock('./pages/accounts-page', () => ({ AccountsPage: () => <div>accounts page</div> }))
 
 const fakeStore = vi.hoisted(() => {
   const listeners = new Set<() => void>()
@@ -74,6 +81,16 @@ const platform = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/supabase/platform', () => platform)
 
+const crm = vi.hoisted(() => ({
+  getCustomerRecord: vi.fn(),
+  getStageCounts: vi.fn(),
+  listMyOpenTasks: vi.fn(),
+}))
+vi.mock('@/lib/supabase/crm', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/supabase/crm')>()),
+  ...crm,
+}))
+
 const membership = (orgId: string, role = 'owner') => ({
   org_id: orgId,
   role,
@@ -108,6 +125,9 @@ beforeEach(() => {
   platform.listOrganisations.mockReset().mockResolvedValue([])
   platform.getOrganisation.mockReset().mockResolvedValue(null)
   platform.listPlatformMembers.mockReset().mockResolvedValue([])
+  crm.getCustomerRecord.mockReset().mockResolvedValue(null)
+  crm.getStageCounts.mockReset().mockResolvedValue({})
+  crm.listMyOpenTasks.mockReset().mockResolvedValue([])
 })
 
 describe('public site', () => {
@@ -160,7 +180,7 @@ describe('signed out', () => {
 describe('signed in', () => {
   beforeEach(() => fakeStore.set(signedIn))
 
-  it('sends /login and /signup into the app', async () => {
+  it('sends /login and /signup through the account chooser into the app', async () => {
     const login = renderAt('/login')
     expect(await screen.findByText('dashboard page')).toBeInTheDocument()
     expect(login.state.location.pathname).toBe('/app')
@@ -283,8 +303,61 @@ describe('organisations', () => {
   })
 })
 
+describe('account chooser', () => {
+  beforeEach(() => fakeStore.set(signedIn))
+
+  it('sends a user with nowhere to go to onboarding', async () => {
+    getMyMemberships.mockResolvedValue([])
+    const router = renderAt('/accounts')
+
+    expect(await screen.findByText('onboarding page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/onboarding')
+  })
+
+  it('goes straight to the only organisation', async () => {
+    const router = renderAt('/accounts')
+
+    expect(await screen.findByText('dashboard page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/app')
+  })
+
+  it('goes straight to the staff area for staff with no organisation', async () => {
+    getMyMemberships.mockResolvedValue([])
+    platform.getMyPlatformRole.mockResolvedValue('support')
+    const router = renderAt('/accounts')
+
+    expect(await screen.findByText('staff overview')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/staff')
+  })
+
+  it('lets staff who also belong to an organisation choose', async () => {
+    platform.getMyPlatformRole.mockResolvedValue('admin')
+    const router = renderAt('/accounts')
+
+    expect(await screen.findByText('accounts page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/accounts')
+  })
+
+  it('lets a member of several organisations choose', async () => {
+    getMyMemberships.mockResolvedValue([membership('org-1'), membership('org-2')])
+    const router = renderAt('/accounts')
+
+    expect(await screen.findByText('accounts page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/accounts')
+  })
+})
+
 describe('staff', () => {
   beforeEach(() => fakeStore.set(signedIn))
+
+  it('serves the profile page inside the staff shell too', async () => {
+    getMyMemberships.mockResolvedValue([])
+    platform.getMyPlatformRole.mockResolvedValue('support')
+    const router = renderAt('/staff/profile')
+
+    expect(await screen.findByText('profile page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/staff/profile')
+  })
 
   it('sends staff with no organisation to the staff area instead of onboarding', async () => {
     getMyMemberships.mockResolvedValue([])
@@ -311,12 +384,21 @@ describe('staff', () => {
     expect(platform.listPlatformMembers).not.toHaveBeenCalled()
   })
 
-  it('serves the staff pages to staff', async () => {
+  it('serves the staff pages to staff, passing search and stage to the list', async () => {
     platform.getMyPlatformRole.mockResolvedValue('support')
-    renderAt('/staff/organisations?q=acme')
+    renderAt('/staff/organisations?q=acme&stage=trial')
 
     expect(await screen.findByText('staff organisations')).toBeInTheDocument()
-    expect(platform.listOrganisations).toHaveBeenCalledWith('acme')
+    expect(platform.listOrganisations).toHaveBeenCalledWith({ search: 'acme', stage: 'trial' })
+  })
+
+  it('drops an unknown stage from the URL', async () => {
+    platform.getMyPlatformRole.mockResolvedValue('support')
+    const router = renderAt('/staff/organisations?stage=bogus')
+
+    await screen.findByText('staff organisations')
+    expect(router.state.location.search).toEqual({})
+    expect(platform.listOrganisations).toHaveBeenCalledWith({ search: '', stage: undefined })
   })
 
   it('renders not-found for an organisation that does not exist', async () => {
@@ -325,6 +407,44 @@ describe('staff', () => {
 
     expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
     expect(platform.getOrganisation).toHaveBeenCalledWith('nope')
+    expect(crm.getCustomerRecord).toHaveBeenCalledWith('nope')
+  })
+
+  it('loads the customer record alongside the organisation', async () => {
+    platform.getMyPlatformRole.mockResolvedValue('support')
+    platform.getOrganisation.mockResolvedValue({ id: 'org-1', name: 'Acme', members: [] })
+    crm.getCustomerRecord.mockResolvedValue({
+      customer: { org_id: 'org-1', stage: 'lead' },
+      contacts: [],
+      activities: [],
+      tasks: [],
+    })
+    renderAt('/staff/organisations/org-1')
+
+    expect(await screen.findByText('staff organisation')).toBeInTheDocument()
+    expect(platform.listPlatformMembers).toHaveBeenCalled()
+  })
+
+  it('loads the pipeline and the viewer’s tasks for the overview', async () => {
+    platform.getMyPlatformRole.mockResolvedValue('support')
+    renderAt('/staff')
+
+    expect(await screen.findByText('staff overview')).toBeInTheDocument()
+    expect(crm.getStageCounts).toHaveBeenCalled()
+    expect(crm.listMyOpenTasks).toHaveBeenCalledWith('user-1')
+  })
+
+  it('lets admins enter a new organisation but sends support back to the list', async () => {
+    platform.getMyPlatformRole.mockResolvedValue('admin')
+    const admin = renderAt('/staff/organisations/new')
+    expect(await screen.findByText('staff new organisation')).toBeInTheDocument()
+    expect(admin.state.location.pathname).toBe('/staff/organisations/new')
+
+    cleanup()
+    platform.getMyPlatformRole.mockResolvedValue('support')
+    const support = renderAt('/staff/organisations/new')
+    expect(await screen.findByText('staff organisations')).toBeInTheDocument()
+    expect(support.state.location.pathname).toBe('/staff/organisations')
   })
 })
 

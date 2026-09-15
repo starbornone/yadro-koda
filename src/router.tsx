@@ -12,6 +12,14 @@ import { PublicLayout } from '@/components/layout/public-layout'
 import { RouteError, RouteNotFound, RoutePending } from '@/components/router/route-fallbacks'
 import { authStore } from '@/lib/auth/auth-store'
 import { readResetLinkError } from '@/lib/auth/password-reset'
+import { canOnPlatform } from '@/lib/auth/permissions'
+import {
+  getCustomerRecord,
+  getStageCounts,
+  isCustomerStage,
+  listMyOpenTasks,
+  type CustomerStage,
+} from '@/lib/supabase/crm'
 import { getMyMemberships } from '@/lib/supabase/organisations'
 import {
   getMyPlatformRole,
@@ -24,7 +32,8 @@ import { getMyProfile } from '@/lib/supabase/profiles'
 import { homeContent } from '@/features/marketing/content'
 import { HomePage } from './pages/home-page'
 
-const DEFAULT_SIGNED_IN_PATH = '/app'
+// The account chooser dispatches: one place to go → straight there; several → pick.
+const DEFAULT_SIGNED_IN_PATH = '/accounts'
 
 // Only accept same-origin paths as a post-login destination (blocks `?redirect=https://…`).
 const isSafeRedirect = (value: unknown): value is string =>
@@ -180,6 +189,25 @@ const loaderDataOf = <T,>(match: { loaderData?: T; error?: unknown }): T => {
 const guardedBy = async <T,>(parentMatchPromise: Promise<{ loaderData?: T; error?: unknown }>) =>
   loaderDataOf(await parentMatchPromise)
 
+// Where to after signing in. One person can be staff and belong to organisations, so with
+// more than one place to go the user picks; with exactly one they go straight there.
+const accountsRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: '/accounts',
+  loader: async ({ parentMatchPromise }) => {
+    const { memberships, platformRole } = loaderDataOf(await parentMatchPromise)
+    const places = memberships.length + (platformRole ? 1 : 0)
+
+    if (places === 0) throw redirect({ to: '/onboarding' })
+    if (places === 1) throw redirect({ to: platformRole ? '/staff' : '/app' })
+
+    return { memberships, platformRole }
+  },
+  staleTime: Infinity,
+  head: () => ({ meta: [{ title: 'Choose an account' }] }),
+  component: lazyRouteComponent(() => import('./pages/accounts-page'), 'AccountsPage'),
+})
+
 // A signed-in user with no organisation yet. Once they have one, this sends them into the app.
 const onboardingRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
@@ -277,9 +305,14 @@ const staffRoute = createRoute({
 const staffOverviewRoute = createRoute({
   getParentRoute: () => staffRoute,
   path: '/staff',
-  loader: async ({ parentMatchPromise }) => {
+  loader: async ({ context, parentMatchPromise }) => {
     await guardedBy(parentMatchPromise)
-    return getPlatformOverview()
+    const [overview, stages, tasks] = await Promise.all([
+      getPlatformOverview(),
+      getStageCounts(),
+      listMyOpenTasks(context.user.id),
+    ])
+    return { ...overview, stages, tasks }
   },
   head: () => ({ meta: [{ title: 'Staff' }] }),
   component: lazyRouteComponent(
@@ -288,16 +321,18 @@ const staffOverviewRoute = createRoute({
   ),
 })
 
+// The organisations list doubles as the CRM pipeline: `?stage=` narrows it to one stage.
 const staffOrganisationsRoute = createRoute({
   getParentRoute: () => staffRoute,
   path: '/staff/organisations',
-  validateSearch: (search: Record<string, unknown>): { q?: string } => ({
+  validateSearch: (search: Record<string, unknown>): { q?: string; stage?: CustomerStage } => ({
     q: typeof search.q === 'string' && search.q.trim() ? search.q : undefined,
+    stage: isCustomerStage(search.stage) ? search.stage : undefined,
   }),
-  loaderDeps: ({ search }) => ({ q: search.q ?? '' }),
+  loaderDeps: ({ search }) => ({ q: search.q ?? '', stage: search.stage }),
   loader: async ({ deps, parentMatchPromise }) => {
     await guardedBy(parentMatchPromise)
-    return listOrganisations(deps.q)
+    return listOrganisations({ search: deps.q, stage: deps.stage })
   },
   head: () => ({ meta: [{ title: 'Organisations' }] }),
   component: lazyRouteComponent(
@@ -306,16 +341,42 @@ const staffOrganisationsRoute = createRoute({
   ),
 })
 
+// Staff enter an organisation before it has any users (a lead). Only the tiers that move the
+// pipeline may; anyone else is sent back to the list.
+const staffNewOrganisationRoute = createRoute({
+  getParentRoute: () => staffRoute,
+  path: '/staff/organisations/new',
+  loader: async ({ parentMatchPromise }) => {
+    const { platformRole } = await guardedBy(parentMatchPromise)
+    if (!canOnPlatform(platformRole, 'platform:manage-customers')) {
+      throw redirect({ to: '/staff/organisations' })
+    }
+  },
+  head: () => ({ meta: [{ title: 'New organisation' }] }),
+  component: lazyRouteComponent(
+    () => import('./pages/staff/staff-new-organisation-page'),
+    'StaffNewOrganisationPage',
+  ),
+})
+
+// One organisation as staff see it: the tenant (members) plus its whole CRM record, and the
+// staff list for owner/assignee choices.
 const staffOrganisationRoute = createRoute({
   getParentRoute: () => staffRoute,
   path: '/staff/organisations/$orgId',
   loader: async ({ params, parentMatchPromise }) => {
     await guardedBy(parentMatchPromise)
-    const organisation = await getOrganisation(params.orgId)
-    if (!organisation) throw notFound()
-    return organisation
+    const [organisation, record, staff] = await Promise.all([
+      getOrganisation(params.orgId),
+      getCustomerRecord(params.orgId),
+      listPlatformMembers(),
+    ])
+    if (!organisation || !record) throw notFound()
+    return { organisation, ...record, staff }
   },
-  head: ({ loaderData }) => ({ meta: [{ title: loaderData?.name ?? 'Organisation' }] }),
+  head: ({ loaderData }) => ({
+    meta: [{ title: loaderData?.organisation.name ?? 'Organisation' }],
+  }),
   component: lazyRouteComponent(
     () => import('./pages/staff/staff-organisation-page'),
     'StaffOrganisationPage',
@@ -333,19 +394,29 @@ const staffTeamRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/staff/staff-team-page'), 'StaffTeamPage'),
 })
 
+const staffProfileRoute = createRoute({
+  getParentRoute: () => staffRoute,
+  path: '/staff/profile',
+  head: () => ({ meta: [{ title: 'Profile' }] }),
+  component: lazyRouteComponent(() => import('./pages/profile-page'), 'StaffProfilePage'),
+})
+
 const routeTree = rootRoute.addChildren([
   publicRoute.addChildren([homeRoute]),
   loginRoute,
   signUpRoute,
   resetPasswordRoute,
   authenticatedRoute.addChildren([
+    accountsRoute,
     onboardingRoute,
     appRoute.addChildren([dashboardRoute, orgSettingsRoute, newOrganisationRoute, profileRoute]),
     staffRoute.addChildren([
       staffOverviewRoute,
       staffOrganisationsRoute,
+      staffNewOrganisationRoute,
       staffOrganisationRoute,
       staffTeamRoute,
+      staffProfileRoute,
     ]),
   ]),
 ])
