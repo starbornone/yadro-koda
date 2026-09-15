@@ -24,3 +24,11 @@ Object.defineProperty(window, 'matchMedia', {
 
 // jsdom has no scrollTo; TanStack Router's scroll restoration calls it on navigation.
 Object.defineProperty(window, 'scrollTo', { writable: true, value: vi.fn() })
+
+// jsdom has no ResizeObserver; Radix (Checkbox, and others) measures with it.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+Object.defineProperty(globalThis, 'ResizeObserver', { writable: true, value: ResizeObserverStub })
