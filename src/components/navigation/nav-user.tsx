@@ -15,8 +15,9 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
-import { ChevronsUpDownIcon, BadgeCheckIcon, LogOutIcon } from 'lucide-react'
+import { ArrowLeftRightIcon, BadgeCheckIcon, ChevronsUpDownIcon, LogOutIcon } from 'lucide-react'
 import { useSignOut } from '@/features/auth/hooks/use-sign-out'
+import { authenticatedRoute } from '@/lib/auth/authenticated-route'
 
 const getAvatarFallback = (displayName: string, email: string) => {
   const nameParts = displayName.trim().split(/\s+/).filter(Boolean)
@@ -38,16 +39,22 @@ const getAvatarFallback = (displayName: string, email: string) => {
 
 export function NavUser({
   user,
+  profileTo = '/app/profile',
 }: {
   user: {
     name: string
     email: string
     avatar: string
   }
+  /** The profile page for the shell this menu sits in. */
+  profileTo?: '/app/profile' | '/staff/profile'
 }) {
   const { isMobile } = useSidebar()
   const { signOut, isSigningOut, error: signOutError } = useSignOut()
+  const { memberships, platformRole } = authenticatedRoute.useLoaderData()
   const avatarFallback = getAvatarFallback(user.name, user.email)
+  // Staff who also belong to organisations, or members of several, can switch between them.
+  const canSwitchAccount = memberships.length + (platformRole ? 1 : 0) > 1
 
   return (
     <SidebarMenu>
@@ -90,11 +97,19 @@ export function NavUser({
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem asChild>
-                <Link to="/app/profile">
+                <Link to={profileTo}>
                   <BadgeCheckIcon />
                   Account
                 </Link>
               </DropdownMenuItem>
+              {canSwitchAccount ? (
+                <DropdownMenuItem asChild>
+                  <Link to="/accounts">
+                    <ArrowLeftRightIcon />
+                    Switch account
+                  </Link>
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             {signOutError ? (

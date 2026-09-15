@@ -71,7 +71,7 @@ export function StaffSidebar(props: React.ComponentProps<typeof Sidebar>) {
         ) : null}
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={resolveDisplayUser(user, profile)} />
+        <NavUser user={resolveDisplayUser(user, profile)} profileTo="/staff/profile" />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
