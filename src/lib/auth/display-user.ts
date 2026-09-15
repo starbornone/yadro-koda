@@ -1,4 +1,5 @@
 import type { User } from '@supabase/supabase-js'
+import type { PublicProfile } from '@/lib/supabase/platform'
 import type { Profile } from '@/lib/supabase/profiles'
 
 export type DisplayUser = {
@@ -22,3 +23,7 @@ export const resolveDisplayUser = (user: User, profile: Profile | null): Display
     metadataString(user.user_metadata, 'picture') ??
     '',
 })
+
+/** How another person is named in lists: display name, else email, else a placeholder. */
+export const personName = (profile: PublicProfile | null | undefined) =>
+  profile?.display_name?.trim() || profile?.email || 'Unnamed'
