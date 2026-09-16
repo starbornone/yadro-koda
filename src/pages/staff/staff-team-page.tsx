@@ -1,4 +1,5 @@
 import { ChevronDownIcon, CircleAlertIcon, Trash2Icon } from 'lucide-react'
+import { InvitationsSection } from '@/components/invitations-section'
 import { PageHeader } from '@/components/layout/page-header'
 import {
   AlertDialog,
@@ -31,7 +32,12 @@ import {
 import { useStaffTeamPage } from '@/features/staff/hooks/use-staff-team-page'
 import { PLATFORM_ROLE_LABELS } from '@/lib/auth/permissions'
 import { formatDate } from '@/lib/format'
-import type { PlatformMember, PlatformRole } from '@/lib/supabase/platform'
+import {
+  createPlatformInvitation,
+  revokePlatformInvitation,
+  type PlatformMember,
+  type PlatformRole,
+} from '@/lib/supabase/platform'
 
 const memberName = (member: PlatformMember) =>
   member.profile.display_name?.trim() || member.profile.email || 'Unnamed'
@@ -39,6 +45,7 @@ const memberName = (member: PlatformMember) =>
 export const StaffTeamPage = () => {
   const {
     members,
+    invitations,
     currentUserId,
     canManage,
     canManageMember,
@@ -57,7 +64,7 @@ export const StaffTeamPage = () => {
           <h1 className="text-2xl font-semibold tracking-tight">Team</h1>
           <p className="text-muted-foreground">
             People who work on the platform itself.
-            {canManage ? ' Admins can change roles and remove people.' : ''}
+            {canManage ? ' Admins can invite people, change roles and remove them.' : ''}
           </p>
         </div>
 
@@ -68,7 +75,10 @@ export const StaffTeamPage = () => {
           </Alert>
         ) : null}
 
-        <div className="overflow-x-auto rounded-xl border">
+        <section aria-labelledby="team-heading" className="overflow-x-auto rounded-xl border">
+          <h2 id="team-heading" className="sr-only">
+            Members
+          </h2>
           <Table>
             <TableHeader>
               <TableRow>
@@ -171,7 +181,18 @@ export const StaffTeamPage = () => {
               })}
             </TableBody>
           </Table>
-        </div>
+        </section>
+
+        {canManage ? (
+          <InvitationsSection
+            invitations={invitations}
+            assignableRoles={assignableRoles}
+            roleLabels={PLATFORM_ROLE_LABELS}
+            description="Invite a colleague by email, then send them the link. They join the team once they sign in with that address and open it."
+            create={createPlatformInvitation}
+            revoke={revokePlatformInvitation}
+          />
+        ) : null}
       </div>
     </>
   )

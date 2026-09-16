@@ -1,13 +1,15 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PlatformMember } from '@/lib/supabase/platform'
+import type { PlatformInvitation, PlatformMember } from '@/lib/supabase/platform'
 import { renderStaff } from '@/test/render-authenticated'
 import { StaffTeamPage } from './staff-team-page'
 
 const platform = vi.hoisted(() => ({
   updatePlatformMemberRole: vi.fn(),
   removePlatformMember: vi.fn(),
+  createPlatformInvitation: vi.fn(),
+  revokePlatformInvitation: vi.fn(),
 }))
 vi.mock('@/lib/supabase/platform', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/supabase/platform')>()),
@@ -36,12 +38,40 @@ const members: PlatformMember[] = [
   },
 ]
 
+const TOKEN = '0f4b9a1e-2c3d-4e5f-8a6b-7c8d9e0f1a2b'
+
+const invitations: PlatformInvitation[] = [
+  {
+    id: 'inv-1',
+    email: 'margaret@example.com',
+    role: 'superadmin',
+    token: TOKEN,
+    invited_by: 'user-0',
+    expires_at: '2999-01-01T00:00:00Z',
+    accepted_at: null,
+    created_at: '2026-09-01T00:00:00Z',
+  },
+  {
+    id: 'inv-2',
+    email: 'katherine@example.com',
+    role: 'support',
+    token: '11111111-2222-4333-8444-555555555555',
+    invited_by: 'user-1',
+    expires_at: '2999-01-02T00:00:00Z',
+    accepted_at: null,
+    created_at: '2026-09-02T00:00:00Z',
+  },
+]
+
 const renderPage = (platformRole: 'superadmin' | 'admin' | 'support' = 'admin') =>
-  renderStaff(<StaffTeamPage />, { path: '/staff/team', loaderData: members, platformRole })
+  renderStaff(<StaffTeamPage />, {
+    path: '/staff/team',
+    loaderData: { members, invitations: platformRole === 'support' ? [] : invitations },
+    platformRole,
+  })
 
 beforeEach(() => {
-  platform.updatePlatformMemberRole.mockReset().mockResolvedValue(undefined)
-  platform.removePlatformMember.mockReset().mockResolvedValue(undefined)
+  for (const fn of Object.values(platform)) fn.mockReset().mockResolvedValue(undefined)
 })
 
 describe('StaffTeamPage', () => {
@@ -114,12 +144,68 @@ describe('StaffTeamPage', () => {
     expect(screen.queryByRole('button', { name: 'Remove Ada' })).not.toBeInTheDocument()
   })
 
-  it('is read-only for support staff', async () => {
+  it('is read-only for support staff, who see no invitations either', async () => {
     renderPage('support')
 
     await screen.findByText('Grace')
     expect(screen.queryByRole('button', { name: /Change role/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Remove/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Invitations' })).not.toBeInTheDocument()
+  })
+
+  it('lets an admin invite below superadmin and revoke only within that tier', async () => {
+    platform.createPlatformInvitation.mockResolvedValue({
+      ...invitations[1],
+      id: 'inv-3',
+      email: 'new@example.com',
+      role: 'admin',
+      token: '22222222-3333-4444-8555-666666666666',
+    })
+    const user = userEvent.setup()
+    const { router } = renderPage('admin')
+    const invalidate = vi.spyOn(router, 'invalidate')
+
+    const section = within(await screen.findByRole('region', { name: 'Invitations' }))
+    const role = section.getByLabelText('Role')
+    expect(within(role).getByRole('option', { name: 'Admin' })).toBeInTheDocument()
+    expect(within(role).queryByRole('option', { name: 'Superadmin' })).not.toBeInTheDocument()
+    // A pending superadmin invitation is visible but out of an admin's reach.
+    expect(section.getByText('margaret@example.com').closest('tr')).toHaveTextContent('Superadmin')
+    expect(
+      section.queryByRole('button', { name: 'Revoke invitation for margaret@example.com' }),
+    ).not.toBeInTheDocument()
+    expect(
+      section.getByRole('button', { name: 'Revoke invitation for katherine@example.com' }),
+    ).toBeInTheDocument()
+
+    await user.type(section.getByLabelText('Email'), 'new@example.com')
+    await user.selectOptions(role, 'admin')
+    await user.click(section.getByRole('button', { name: 'Create invitation' }))
+
+    expect(platform.createPlatformInvitation).toHaveBeenCalledWith({
+      email: 'new@example.com',
+      role: 'admin',
+    })
+    expect(await screen.findByLabelText('Invitation link for new@example.com')).toHaveValue(
+      `${window.location.origin}/invite/22222222-3333-4444-8555-666666666666`,
+    )
+    await waitFor(() => expect(invalidate).toHaveBeenCalled())
+  })
+
+  it('lets a superadmin invite as any role and revoke anything', async () => {
+    const user = userEvent.setup()
+    renderPage('superadmin')
+
+    const section = within(await screen.findByRole('region', { name: 'Invitations' }))
+    expect(
+      within(section.getByLabelText('Role')).getByRole('option', { name: 'Superadmin' }),
+    ).toBeInTheDocument()
+
+    await user.click(
+      section.getByRole('button', { name: 'Revoke invitation for margaret@example.com' }),
+    )
+    await user.click(await screen.findByRole('button', { name: 'Revoke' }))
+    expect(platform.revokePlatformInvitation).toHaveBeenCalledWith('inv-1')
   })
 
   it('surfaces a failure, such as removing the last admin', async () => {
