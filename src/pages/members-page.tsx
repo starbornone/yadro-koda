@@ -1,8 +1,9 @@
+import { InvitationsSection } from '@/components/invitations-section'
 import { PageHeader } from '@/components/layout/page-header'
-import { InvitationsSection } from '@/features/organisations/components/invitations-section'
 import { MembersSection } from '@/features/organisations/components/members-section'
 import { useMembersPage } from '@/features/organisations/hooks/use-members-page'
 import { ORG_ROLE_LABELS } from '@/lib/auth/permissions'
+import { createInvitation, revokeInvitation } from '@/lib/supabase/invitations'
 
 export const MembersPage = () => {
   const {
@@ -40,9 +41,12 @@ export const MembersPage = () => {
 
           {canManage ? (
             <InvitationsSection
-              orgId={org.id}
               invitations={invitations}
               assignableRoles={assignableRoles}
+              roleLabels={ORG_ROLE_LABELS}
+              description="Invite someone by email, then send them the link. They join once they sign in with that address and open it."
+              create={(input) => createInvitation(org.id, input)}
+              revoke={revokeInvitation}
             />
           ) : null}
         </div>
