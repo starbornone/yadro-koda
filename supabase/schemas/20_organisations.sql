@@ -184,6 +184,37 @@ as $$
   end;
 $$;
 
+-- Who may manage an organisation's members (invite, change roles, remove): its owners and
+-- admins, and staff who may write on its behalf.
+create or replace function public.can_manage_org_members(target_org uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select public.has_org_role(target_org, array['owner', 'admin']::public.org_role[])
+    or public.platform_can_manage_org(target_org);
+$$;
+
+-- Who may change, remove or invite a member holding `target_role`: owners anyone, admins
+-- anyone below owner. Checked against the old row (may I touch this person?) and the new one
+-- (may I hand out this role?), so nobody promotes past their own tier.
+create or replace function public.can_manage_org_member(target_org uuid, target_role public.org_role)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select public.platform_can_manage_org(target_org)
+    or case public.org_role(target_org)
+      when 'owner' then true
+      when 'admin' then target_role <> 'owner'
+      else false
+    end;
+$$;
+
 -- True when the caller and `target_user` are both current members of at least one common
 -- organisation. Lets colleagues see each other's profiles without exposing anyone else's.
 create or replace function public.shares_org_with(target_user uuid)
@@ -213,9 +244,12 @@ alter table public.memberships enable row level security;
 alter table public.platform_members enable row level security;
 
 revoke all on table public.organisations, public.memberships, public.platform_members from anon;
--- Rows are created through create_organisation() and create_lead() (30_crm.sql); direct
--- inserts/deletes come with the invitation and member-management work.
-revoke insert, delete on table public.organisations, public.memberships from authenticated;
+-- Organisations are created through create_organisation() and create_lead() (30_crm.sql) and
+-- never deleted from the client (yet). Memberships are created through create_organisation()
+-- and accept_invitation() (25_invitations.sql); managers may change a role or remove a row.
+revoke insert, delete on table public.organisations from authenticated;
+revoke insert, update on table public.memberships from authenticated;
+grant update (role) on table public.memberships to authenticated;
 -- Staff are added by invitation (later); the tiers above a row may change or remove it.
 revoke insert on table public.platform_members from authenticated;
 revoke update on table public.platform_members from authenticated;
@@ -249,6 +283,51 @@ create policy "memberships_select_same_org_or_staff"
   for select
   to authenticated
   using (public.is_org_member(org_id) or public.platform_can_access_org(org_id));
+
+-- Owners manage anyone; admins anyone below owner; nobody hands out a role above their own.
+-- The UI also stops people changing their own row; the last-owner trigger below is the only
+-- rule the database adds on top.
+create policy "memberships_update_manager_by_tier"
+  on public.memberships
+  for update
+  to authenticated
+  using (public.can_manage_org_member(org_id, role))
+  with check (public.can_manage_org_member(org_id, role));
+
+create policy "memberships_delete_manager_by_tier"
+  on public.memberships
+  for delete
+  to authenticated
+  using (public.can_manage_org_member(org_id, role));
+
+-- An organisation with no owner cannot be administered. Refuse the change that would cause
+-- it — unless the organisation itself is being deleted and its rows are cascading away.
+create or replace function public.protect_last_owner()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if old.role = 'owner'
+     and (tg_op = 'DELETE' or new.role <> 'owner')
+     and exists (select 1 from public.organisations o where o.id = old.org_id)
+     and (
+       select count(*) from public.memberships m
+       where m.org_id = old.org_id
+         and m.role = 'owner'
+         and (m.expires_at is null or m.expires_at > now())
+     ) <= 1 then
+    raise exception 'cannot remove the last owner'
+      using errcode = 'check_violation';
+  end if;
+  return coalesce(new, old);
+end;
+$$;
+
+create trigger memberships_protect_last_owner
+  before update of role or delete on public.memberships
+  for each row execute function public.protect_last_owner();
 
 -- Every staff member can see the team; only the tiers above a row may change or remove it,
 -- and nobody may promote past their own tier.

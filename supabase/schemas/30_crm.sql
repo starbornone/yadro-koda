@@ -201,6 +201,32 @@ create trigger contacts_set_primary
   before insert or update of is_primary on public.contacts
   for each row execute function public.set_primary_contact();
 
+-- When someone joins an organisation, the contact staff already hold for them (same email,
+-- not yet linked) becomes theirs. This is how a lead's contact and the account they sign in
+-- with end up as one person; there is no way to link them by hand.
+create or replace function public.link_contact_to_member()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.contacts c
+  set user_id = new.user_id
+  from public.profiles p
+  where p.id = new.user_id
+    and c.org_id = new.org_id
+    and c.user_id is null
+    and c.email is not null
+    and lower(c.email) = lower(p.email);
+  return new;
+end;
+$$;
+
+create trigger memberships_link_contact
+  after insert on public.memberships
+  for each row execute function public.link_contact_to_member();
+
 -- ---------------------------------------------------------------------------
 -- Row-level security
 -- ---------------------------------------------------------------------------
@@ -341,7 +367,7 @@ revoke all on table public.customer_stage_counts from anon;
 
 -- ---------------------------------------------------------------------------
 -- create_lead(): staff enter an organisation before it has any users. It starts at `lead`,
--- owned by whoever entered it. Its first user arrives by invitation (later).
+-- owned by whoever entered it. Its first user arrives by invitation (25_invitations.sql).
 -- ---------------------------------------------------------------------------
 
 create or replace function public.create_lead(name text, slug text, source text default null)
