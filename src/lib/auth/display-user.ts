@@ -1,5 +1,5 @@
 import type { User } from '@supabase/supabase-js'
-import type { PublicProfile } from '@/lib/supabase/platform'
+import type { PublicProfile } from '@/lib/supabase/organisations'
 import type { Profile } from '@/lib/supabase/profiles'
 
 export type DisplayUser = {
