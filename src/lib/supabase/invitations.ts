@@ -1,12 +1,16 @@
 import type { OrgRole, Organisation } from './organisations'
+import type { PlatformRole } from './platform'
 import { supabase } from './supabase'
 
 /**
- * Invitations: how people join an organisation that already exists. A manager creates one for
- * an email and a role, passes on the link the app builds from its token, and whoever signs in
- * with that email and opens the link becomes a member (`accept_invitation()`). Rows are visible
- * to the organisation's managers and to staff; the invitee reads theirs through
- * `get_invitation()`, which works before they have signed in.
+ * Invitations: how people join an organisation that already exists, or the staff team. A
+ * manager creates one for an email and a role, passes on the link the app builds from its
+ * token, and whoever signs in with that email and opens the link joins (`accept_invitation()`
+ * / `accept_platform_invitation()`). The invitee reads theirs through `get_invitation()`,
+ * which works before they have signed in and says which kind the link is.
+ *
+ * Organisation invitations are managed here; the staff team's are in `platform.ts` alongside
+ * the rest of the team. Both kinds share the link and the accept screen.
  */
 
 export type Invitation = {
@@ -22,20 +26,22 @@ export type Invitation = {
   created_at: string
 }
 
-/** What `get_invitation()` tells the person holding the link. */
-export type InvitationPreview = {
-  organisation_name: string
+type InvitationPreviewBase = {
   email: string
-  role: OrgRole
   invited_by_name: string | null
   expires_at: string
   accepted_at: string | null
 }
 
+/** What `get_invitation()` tells the person holding the link: which kind it is, and its facts. */
+export type InvitationPreview =
+  | (InvitationPreviewBase & { kind: 'organisation'; organisation_name: string; role: OrgRole })
+  | (InvitationPreviewBase & { kind: 'platform'; organisation_name: null; role: PlatformRole })
+
 export type InvitationStatus = 'pending' | 'expired' | 'accepted'
 
 export const invitationStatus = (
-  invitation: Pick<InvitationPreview, 'expires_at' | 'accepted_at'>,
+  invitation: { expires_at: string; accepted_at?: string | null },
   now = Date.now(),
 ): InvitationStatus =>
   invitation.accepted_at
@@ -124,4 +130,13 @@ export const acceptInvitation = async (token: string): Promise<Organisation> => 
   }
 
   return data as Organisation
+}
+
+/** Joins the staff team as the invited role. */
+export const acceptPlatformInvitation = async (token: string): Promise<void> => {
+  const { error } = await supabase.rpc('accept_platform_invitation', { token })
+
+  if (error) {
+    throw error
+  }
 }
