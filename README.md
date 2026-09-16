@@ -34,7 +34,8 @@ The schema is declared in [`supabase/schemas`](supabase/schemas) — see
 [`supabase/README.md`](supabase/README.md) for how to apply it. In short: a `public.profiles`
 table kept in sync with `auth.users` by triggers; `organisations`, `memberships` and
 `platform_members` with RLS helpers (`is_org_member`, `has_org_role`, `platform_can_access_org`);
-`invitations` with the `get_invitation()` / `accept_invitation()` RPCs; the staff-only CRM tables
+`invitations` and `platform_invitations` with the `get_invitation()` / `accept_invitation()` /
+`accept_platform_invitation()` RPCs; the staff-only CRM tables
 (`customers`, `contacts`, `activities`, `tasks`); and column grants so clients can only write the
 fields they own.
 
@@ -73,8 +74,8 @@ src/
     supabase/           # Supabase client; profile, organisation, invitation, platform, CRM queries
   features/
     auth/               # Auth layout, login / sign-up / reset forms and hooks
-    organisations/      # Create-organisation form, members and invitations sections, and the
-                        # settings / members / invite page hooks
+    organisations/      # Create-organisation form, members section, and the settings /
+                        # members / invite page hooks
     staff/              # Staff team and organisation page hooks
     crm/                # Customer record sections (pipeline, contacts, activity, tasks), stages
     accounts/           # Account chooser hook
@@ -84,6 +85,7 @@ src/
   components/
     ui/                 # shadcn primitives (generated; edit sparingly)
     confirm-button.tsx  # Button that asks before an irreversible action
+    invitations-section.tsx # Invite-by-link form and open invitations (organisation or staff team)
     layout/             # PublicLayout (marketing), AppShell + StaffShell (sidebars),
                         # PageHeader (breadcrumbs)
     theme/              # ThemeToggle dropdown
@@ -117,7 +119,7 @@ Path alias: `@/` → `src/`.
 | `/staff`                 | staff                | Overview: counts, pipeline by stage, your open tasks    |
 | `/staff/organisations`   | staff                | Every organisation (`?q=`, `?stage=`); `new` for leads  |
 | `/staff/organisations/…` | staff                | Customer record: pipeline, contacts, tasks, members     |
-| `/staff/team`            | staff                | Platform members; admins and up change roles / remove   |
+| `/staff/team`            | staff                | Platform members; admins and up invite, change, remove  |
 | `/staff/profile`         | staff                | The profile page, inside the staff shell                |
 
 Every route sets its `<title>` via TanStack's `head()`; the home page also sets a meta
@@ -135,6 +137,10 @@ There are two layers of users, each with its own roles, routes and shell:
   - `superadmin` — full access: every tenant read **and write**, and the whole staff team.
   - `admin` — reads tenants; manages staff below superadmin.
   - `support` — reads tenants.
+
+  Staff join by invitation from `/staff/team` (`platform_invitations`, same link and accept
+  screen as organisation invitations): superadmins invite as any role, admins as anything below
+  superadmin, support nobody — `platform_can_manage_member()` again.
 
   Tenant RLS reaches staff through two functions, so staff reach can be narrowed in one place:
   `platform_can_access_org()` (read, every tier) and `platform_can_manage_org()` (write,
@@ -160,7 +166,10 @@ and `platformRole` once. Non-staff who open `/staff` are sent to `/app`.
   The link shows what the invitation is before asking for a sign-in, and `accept_invitation()`
   (RPC) only lets a session whose profile email matches accept: it creates the membership,
   marks the invitation used and makes the organisation active, atomically. Links last 7 days;
-  revoking deletes the row; one open invitation per address per organisation.
+  revoking deletes the row; one open invitation per address per organisation. Staff-team
+  invitations (`platform_invitations`, `accept_platform_invitation()`) work the same way;
+  `get_invitation()` tells the invite page which kind a link is, and the page sends the person
+  to `/app` or `/staff` accordingly.
 - **Managing members** (`/app/members`) follows the same tier rule in SQL
   (`can_manage_org_member()`): owners change or remove anyone, admins anyone below owner. The
   UI never offers it on your own row, and the database refuses to remove or demote the last
