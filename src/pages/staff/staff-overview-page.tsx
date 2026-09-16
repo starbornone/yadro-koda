@@ -4,7 +4,7 @@ import { PageHeader } from '@/components/layout/page-header'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
-import { useCrmAction } from '@/features/crm/hooks/use-crm-action'
+import { useRouteAction } from '@/hooks/use-route-action'
 import { CUSTOMER_STAGE_LABELS } from '@/features/crm/stages'
 import { formatDay, today } from '@/lib/format'
 import { CUSTOMER_STAGES, setTaskCompleted } from '@/lib/supabase/crm'
@@ -15,7 +15,7 @@ const route = getRouteApi('/_authenticated/_staff/staff')
 /** Counts across every organisation, the pipeline by stage, and the viewer's own follow-ups. */
 export const StaffOverviewPage = () => {
   const overview = route.useLoaderData()
-  const { busy, error, run } = useCrmAction()
+  const { busy, error, run } = useRouteAction()
 
   const stats = [
     {
