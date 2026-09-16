@@ -7,7 +7,7 @@
 --     staff access (e.g. to assigned organisations) in one place:
 --       platform_can_access_org()  — read:  every staff role
 --       platform_can_manage_org()  — write: superadmin only
---     Adding staff is by invitation (later).
+--     Adding staff is by invitation (25_invitations.sql); staff never self-sign-up.
 --
 -- One person may be both staff and an organisation member — the same auth.users row carries a
 -- platform_members row and memberships. The app offers an account chooser between them.
@@ -250,7 +250,8 @@ revoke all on table public.organisations, public.memberships, public.platform_me
 revoke insert, delete on table public.organisations from authenticated;
 revoke insert, update on table public.memberships from authenticated;
 grant update (role) on table public.memberships to authenticated;
--- Staff are added by invitation (later); the tiers above a row may change or remove it.
+-- Staff are added through accept_platform_invitation() (25_invitations.sql); the tiers above
+-- a row may change or remove it.
 revoke insert on table public.platform_members from authenticated;
 revoke update on table public.platform_members from authenticated;
 grant update (role) on table public.platform_members to authenticated;
