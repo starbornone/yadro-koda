@@ -7,7 +7,7 @@ import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { StageBadge } from '@/features/crm/components/stage-badge'
-import { useCrmAction } from '@/features/crm/hooks/use-crm-action'
+import { useRouteAction } from '@/hooks/use-route-action'
 import { CUSTOMER_STAGE_LABELS } from '@/features/crm/stages'
 import { personName } from '@/lib/auth/display-user'
 import { CUSTOMER_STAGES, updateCustomer, type Customer } from '@/lib/supabase/crm'
@@ -26,7 +26,7 @@ type PipelineFormProps = {
  * so the form keeps its own state and the record catches up on the next load.
  */
 export const PipelineForm = ({ customer, staff, canManage }: PipelineFormProps) => {
-  const { busy, error, run } = useCrmAction()
+  const { busy, error, run } = useRouteAction()
   const [stage, setStage] = useState(customer.stage)
   const [ownerId, setOwnerId] = useState(customer.owner_id ?? '')
   const [source, setSource] = useState(customer.source ?? '')
