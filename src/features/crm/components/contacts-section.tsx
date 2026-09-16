@@ -17,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { useCrmAction } from '@/features/crm/hooks/use-crm-action'
+import { useRouteAction } from '@/hooks/use-route-action'
 import {
   addContact,
   removeContact,
@@ -46,7 +46,7 @@ export const ContactsSection = ({
   canLog,
   canManage,
 }: ContactsSectionProps) => {
-  const { busy, error, run } = useCrmAction()
+  const { busy, error, run } = useRouteAction()
   // 'new' for the add form, a contact id for its edit form, null for neither.
   const [editing, setEditing] = useState<'new' | string | null>(null)
 
