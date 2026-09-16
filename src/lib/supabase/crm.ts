@@ -1,5 +1,4 @@
-import type { Organisation } from './organisations'
-import type { PublicProfile } from './platform'
+import type { Organisation, PublicProfile } from './organisations'
 import { supabase } from './supabase'
 
 /**
