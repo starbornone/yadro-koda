@@ -18,6 +18,17 @@ const ORG_PERMISSIONS: Record<OrgAction, readonly OrgRole[]> = {
 
 export const canInOrg = (role: OrgRole, action: OrgAction) => ORG_PERMISSIONS[action].includes(role)
 
+/** Highest first. Mirrors the `org_role` enum and `can_manage_org_member()`. */
+export const ORG_ROLES: readonly OrgRole[] = ['owner', 'admin', 'member']
+
+/** Owners manage anyone; admins manage anyone below owner; members manage nobody. */
+export const canManageOrgMember = (actor: OrgRole, target: OrgRole) =>
+  actor === 'owner' || (actor === 'admin' && target !== 'owner')
+
+/** The roles an actor may assign or invite: never above their own tier. */
+export const assignableOrgRoles = (actor: OrgRole): readonly OrgRole[] =>
+  canInOrg(actor, 'org:manage-members') ? ORG_ROLES.slice(ORG_ROLES.indexOf(actor)) : []
+
 export const ORG_ROLE_LABELS: Record<OrgRole, string> = {
   owner: 'Owner',
   admin: 'Admin',

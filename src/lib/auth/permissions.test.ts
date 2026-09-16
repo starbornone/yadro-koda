@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  assignableOrgRoles,
   assignablePlatformRoles,
   canInOrg,
+  canManageOrgMember,
   canManagePlatformMember,
   canOnPlatform,
 } from './permissions'
@@ -47,5 +49,19 @@ describe('platform member management', () => {
     expect(assignablePlatformRoles('superadmin')).toEqual(['superadmin', 'admin', 'support'])
     expect(assignablePlatformRoles('admin')).toEqual(['admin', 'support'])
     expect(assignablePlatformRoles('support')).toEqual([])
+  })
+})
+
+describe('organisation member management', () => {
+  it('never lets anyone reach above their own tier', () => {
+    expect(canManageOrgMember('owner', 'owner')).toBe(true)
+    expect(canManageOrgMember('admin', 'owner')).toBe(false)
+    expect(canManageOrgMember('admin', 'admin')).toBe(true)
+    expect(canManageOrgMember('admin', 'member')).toBe(true)
+    expect(canManageOrgMember('member', 'member')).toBe(false)
+
+    expect(assignableOrgRoles('owner')).toEqual(['owner', 'admin', 'member'])
+    expect(assignableOrgRoles('admin')).toEqual(['admin', 'member'])
+    expect(assignableOrgRoles('member')).toEqual([])
   })
 })
