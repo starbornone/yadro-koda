@@ -56,6 +56,10 @@ type RenderOptions = {
   org?: Organisation
   role?: OrgRole
   platformRole?: PlatformRole | null
+  /** The page's own route path, e.g. `/app/members`, when its hook reads that route's data. */
+  path?: string
+  /** What the page's own loader would have returned. */
+  loaderData?: unknown
 }
 
 const authenticatedLayout = ({
@@ -79,10 +83,17 @@ const authenticatedLayout = ({
  * layout chain (same ids, context and loader data), so `authenticatedRoute.*` and
  * `appRoute.useLoaderData()` resolve without the real guards or Supabase. Pages are wrapped in
  * a `SidebarProvider` as the app shell would. The page renders once the loaders settle; await a
- * `findBy…` query for its content.
+ * `findBy…` query for its content. Pages whose hook reads their own route
+ * (`getRouteApi('/_authenticated/_app/app/…')`) pass `path` and `loaderData`.
  */
 export const renderAuthenticated = (ui: ReactNode, options: RenderOptions = {}) => {
-  const { memberships = [testMembership], org = testOrg, role = 'owner' } = options
+  const {
+    memberships = [testMembership],
+    org = testOrg,
+    role = 'owner',
+    path = '/page',
+    loaderData,
+  } = options
   const { rootRoute, authenticatedRoute } = authenticatedLayout(options)
   const appRoute = createRoute({
     getParentRoute: () => authenticatedRoute,
@@ -91,14 +102,15 @@ export const renderAuthenticated = (ui: ReactNode, options: RenderOptions = {}) 
   })
   const pageRoute = createRoute({
     getParentRoute: () => appRoute,
-    path: '/page',
+    path,
+    loader: () => loaderData,
     component: () => <SidebarProvider>{ui}</SidebarProvider>,
   })
   const router = createRouter({
     routeTree: rootRoute.addChildren([
       authenticatedRoute.addChildren([appRoute.addChildren([pageRoute])]),
     ]),
-    history: createMemoryHistory({ initialEntries: ['/page'] }),
+    history: createMemoryHistory({ initialEntries: [path] }),
   })
 
   return { ...render(<RouterProvider router={router} />), router }
@@ -109,8 +121,6 @@ type StaffRenderOptions = RenderOptions & {
   path: string
   /** The URL to open; defaults to `path`. Needed when the path has params. */
   url?: string
-  /** What the page's own loader would have returned. */
-  loaderData?: unknown
 }
 
 /**
