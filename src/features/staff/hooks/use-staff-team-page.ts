@@ -20,7 +20,7 @@ export const useStaffTeamPage = () => {
   const router = useRouter()
   const { user } = authenticatedRoute.useRouteContext()
   const { platformRole } = staffRoute.useLoaderData()
-  const members = route.useLoaderData()
+  const { members, invitations } = route.useLoaderData()
   const [busyUserId, setBusyUserId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -66,6 +66,7 @@ export const useStaffTeamPage = () => {
 
   return {
     members,
+    invitations,
     currentUserId: user.id,
     canManage,
     canManageMember,
