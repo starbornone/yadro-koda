@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
-import { useCrmAction } from '@/features/crm/hooks/use-crm-action'
+import { useRouteAction } from '@/hooks/use-route-action'
 import { ACTIVITY_KIND_LABELS, LOGGABLE_ACTIVITY_KINDS } from '@/features/crm/stages'
 import { personName } from '@/lib/auth/display-user'
 import { formatDateTime } from '@/lib/format'
@@ -55,7 +55,7 @@ export const ActivitySection = ({
   canLog,
   canManage,
 }: ActivitySectionProps) => {
-  const { busy, error, run } = useCrmAction()
+  const { busy, error, run } = useRouteAction()
   const [kind, setKind] = useState<ActivityInput['kind']>('note')
   const [contactId, setContactId] = useState('')
   const [body, setBody] = useState('')
