@@ -4,27 +4,20 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { ActivitySection } from '@/features/crm/components/activity-section'
 import { ContactsSection } from '@/features/crm/components/contacts-section'
 import { PipelineForm } from '@/features/crm/components/pipeline-form'
 import { StageBadge } from '@/features/crm/components/stage-badge'
 import { TasksSection } from '@/features/crm/components/tasks-section'
+import { InvitationsSection } from '@/features/organisations/components/invitations-section'
+import { MembersSection } from '@/features/organisations/components/members-section'
 import { useStaffOrganisationPage } from '@/features/staff/hooks/use-staff-organisation-page'
 import { personName } from '@/lib/auth/display-user'
-import { ORG_ROLE_LABELS } from '@/lib/auth/permissions'
-import { formatDate, formatDateTime } from '@/lib/format'
+import { formatDate } from '@/lib/format'
 
 /**
  * The customer record: one organisation as staff see it — where it sits in the pipeline, who
- * to talk to, what has happened, what is next, and (once it has users) who its members are.
+ * to talk to, what has happened, what is next, who its members are and who has been invited.
  */
 export const StaffOrganisationPage = () => {
   const {
@@ -34,8 +27,11 @@ export const StaffOrganisationPage = () => {
     activities,
     tasks,
     staff,
+    invitations,
     currentUserId,
     canRename,
+    canManageMember,
+    assignableRoles,
     canManageCustomers,
     canLogActivity,
     rename,
@@ -106,49 +102,21 @@ export const StaffOrganisationPage = () => {
           canManage={canManageCustomers}
         />
 
-        <section aria-labelledby="org-members-heading" className="flex flex-col gap-3">
-          <h2 id="org-members-heading" className="text-base font-medium">
-            Members
-          </h2>
-          {organisation.members.length === 0 ? (
-            <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-              Nobody has joined yet.
-            </p>
-          ) : (
-            <div className="overflow-x-auto rounded-xl border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Joined</TableHead>
-                    <TableHead>Access ends</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {organisation.members.map((member) => (
-                    <TableRow key={member.user_id}>
-                      <TableCell className="font-medium">
-                        {member.profile.display_name?.trim() || '—'}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {member.profile.email ?? '—'}
-                      </TableCell>
-                      <TableCell>{ORG_ROLE_LABELS[member.role]}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatDate(member.created_at)}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {member.expires_at ? formatDateTime(member.expires_at) : 'Never'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </section>
+        <MembersSection
+          orgId={organisation.id}
+          members={organisation.members}
+          currentUserId={currentUserId}
+          canManageMember={canManageMember}
+          assignableRoles={assignableRoles}
+        />
+
+        {assignableRoles.length > 0 ? (
+          <InvitationsSection
+            orgId={organisation.id}
+            invitations={invitations}
+            assignableRoles={assignableRoles}
+          />
+        ) : null}
 
         {canRename ? (
           <form onSubmit={rename.handleRename} className="max-w-md">

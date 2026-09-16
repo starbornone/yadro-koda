@@ -2,16 +2,30 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Activity, Contact, Customer, Task } from '@/lib/supabase/crm'
+import type { Invitation } from '@/lib/supabase/invitations'
 import type { OrganisationDetail, PlatformMember } from '@/lib/supabase/platform'
 import { renderStaff } from '@/test/render-authenticated'
 import { StaffOrganisationPage } from './staff-organisation-page'
 
 vi.mock('@/lib/supabase/supabase', () => ({ supabase: {} }))
 
-const updateOrganisation = vi.hoisted(() => vi.fn())
+const organisations = vi.hoisted(() => ({
+  updateOrganisation: vi.fn(),
+  updateMembershipRole: vi.fn(),
+  removeMember: vi.fn(),
+}))
 vi.mock('@/lib/supabase/organisations', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/supabase/organisations')>()),
-  updateOrganisation,
+  ...organisations,
+}))
+
+const invitationsApi = vi.hoisted(() => ({
+  createInvitation: vi.fn(),
+  revokeInvitation: vi.fn(),
+}))
+vi.mock('@/lib/supabase/invitations', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/supabase/invitations')>()),
+  ...invitationsApi,
 }))
 
 const crm = vi.hoisted(() => ({
@@ -31,7 +45,8 @@ vi.mock('@/lib/supabase/crm', async (importOriginal) => ({
 }))
 
 beforeEach(() => {
-  updateOrganisation.mockReset()
+  for (const fn of Object.values(organisations)) fn.mockReset().mockResolvedValue(undefined)
+  for (const fn of Object.values(invitationsApi)) fn.mockReset().mockResolvedValue(undefined)
   for (const fn of Object.values(crm)) fn.mockReset().mockResolvedValue(undefined)
 })
 
@@ -157,7 +172,21 @@ const staff: PlatformMember[] = [
   },
 ]
 
-const record = { organisation, customer, contacts, activities, tasks, staff }
+const invitations: Invitation[] = [
+  {
+    id: 'inv-1',
+    org_id: 'org-1',
+    email: 'grace@acme.test',
+    role: 'owner',
+    token: '0f4b9a1e-2c3d-4e5f-8a6b-7c8d9e0f1a2b',
+    invited_by: 'user-2',
+    expires_at: '2999-01-01T00:00:00Z',
+    accepted_at: null,
+    created_at: '2026-09-01T00:00:00Z',
+  },
+]
+
+const record = { organisation, customer, contacts, activities, tasks, staff, invitations }
 
 const renderPage = (platformRole: 'superadmin' | 'admin' | 'support', loaderData = record) =>
   renderStaff(<StaffOrganisationPage />, {
@@ -190,10 +219,12 @@ describe('StaffOrganisationPage', () => {
     // Tasks: open ones listed and overdue flagged, completed ones folded away.
     expect(screen.getByText('Send proposal').closest('li')).toHaveTextContent(/Overdue/)
     expect(screen.getByRole('button', { name: 'Completed (1)' })).toBeInTheDocument()
-    // Members.
+    // Members, read-only, and no invitations section for a tier that cannot invite.
     const members = within(screen.getByRole('region', { name: 'Members' }))
     expect(members.getByText('Ada').closest('tr')).toHaveTextContent('Owner')
     expect(members.getByText('temp@example.com').closest('tr')).toHaveTextContent('Member')
+    expect(members.queryByRole('button', { name: /Change role/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Invitations' })).not.toBeInTheDocument()
   })
 
   it('keeps the pipeline read-only for support, who can still log and remove only their own', async () => {
@@ -330,7 +361,7 @@ describe('StaffOrganisationPage', () => {
 
 describe('StaffOrganisationPage as superadmin', () => {
   it('can rename the organisation', async () => {
-    updateOrganisation.mockResolvedValue({
+    organisations.updateOrganisation.mockResolvedValue({
       id: 'org-1',
       name: 'Acme Ltd',
       slug: 'acme',
@@ -345,7 +376,7 @@ describe('StaffOrganisationPage as superadmin', () => {
     await user.type(name, 'Acme Ltd')
     await user.click(screen.getByRole('button', { name: 'Rename' }))
 
-    expect(updateOrganisation).toHaveBeenCalledWith('org-1', { name: 'Acme Ltd' })
+    expect(organisations.updateOrganisation).toHaveBeenCalledWith('org-1', { name: 'Acme Ltd' })
     expect(await screen.findByText('Organisation renamed.')).toBeInTheDocument()
     await waitFor(() => expect(invalidate).toHaveBeenCalled())
   })
@@ -355,5 +386,35 @@ describe('StaffOrganisationPage as superadmin', () => {
 
     await screen.findByRole('heading', { level: 1, name: 'Acme' })
     expect(screen.queryByLabelText('Organisation name')).not.toBeInTheDocument()
+  })
+
+  it('manages members as an owner would, and invites on the tenant’s behalf', async () => {
+    const user = userEvent.setup()
+    renderPage('superadmin')
+
+    // user-1 (Ada) is the viewer: their own row stays untouchable even for a superadmin.
+    await screen.findByRole('heading', { level: 1, name: 'Acme' })
+    expect(screen.queryByRole('button', { name: 'Change role for Ada' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Change role for temp@example.com' }))
+    await user.click(await screen.findByRole('menuitemradio', { name: 'Owner' }))
+    expect(organisations.updateMembershipRole).toHaveBeenCalledWith('org-1', 'user-9', 'owner')
+
+    const section = within(screen.getByRole('region', { name: 'Invitations' }))
+    expect(section.getByText('grace@acme.test').closest('tr')).toHaveTextContent('Owner')
+    await user.type(section.getByLabelText('Email'), 'alan@acme.test')
+    await user.selectOptions(section.getByLabelText('Role'), 'owner')
+    await user.click(section.getByRole('button', { name: 'Create invitation' }))
+    expect(invitationsApi.createInvitation).toHaveBeenCalledWith('org-1', {
+      email: 'alan@acme.test',
+      role: 'owner',
+    })
+  })
+
+  it('offers no member management to admins', async () => {
+    renderPage('admin')
+
+    await screen.findByRole('heading', { level: 1, name: 'Acme' })
+    expect(screen.queryByRole('button', { name: /Change role/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Invitations' })).not.toBeInTheDocument()
   })
 })
