@@ -16,6 +16,19 @@ export type PlatformMember = {
   profile: PublicProfile
 }
 
+/** An invitation to the staff team. Same shape as an organisation's, minus the organisation. */
+export type PlatformInvitation = {
+  id: string
+  email: string
+  role: PlatformRole
+  /** The link secret. */
+  token: string
+  invited_by: string | null
+  expires_at: string
+  accepted_at: string | null
+  created_at: string
+}
+
 /** An organisation in the staff list: the tenant plus its CRM stage and account manager. */
 export type OrganisationSummary = Organisation & {
   member_count: number
@@ -161,6 +174,58 @@ export const updatePlatformMemberRole = async (
 
 export const removePlatformMember = async (userId: string): Promise<void> => {
   const { error } = await supabase.from('platform_members').delete().eq('user_id', userId)
+
+  if (error) {
+    throw error
+  }
+}
+
+// Invitations to the team. Any staff member may read them; creating and revoking follow the
+// same tier rule as the team itself (RLS). The link and the accept screen are shared with
+// organisation invitations — see `invitations.ts`.
+
+const PLATFORM_INVITATION_SELECT =
+  'id, email, role, token, invited_by, expires_at, accepted_at, created_at'
+
+/** Open invitations to the team (pending and expired), oldest first. */
+export const listPlatformInvitations = async (): Promise<PlatformInvitation[]> => {
+  const { data, error } = await supabase
+    .from('platform_invitations')
+    .select(PLATFORM_INVITATION_SELECT)
+    .is('accepted_at', null)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    throw error
+  }
+
+  return (data ?? []) as unknown as PlatformInvitation[]
+}
+
+export type CreatePlatformInvitationInput = {
+  email: string
+  role: PlatformRole
+}
+
+/** Invites an email address to the team. Returns the row, token included, for the link. */
+export const createPlatformInvitation = async (
+  input: CreatePlatformInvitationInput,
+): Promise<PlatformInvitation> => {
+  const { data, error } = await supabase
+    .from('platform_invitations')
+    .insert({ email: input.email.trim().toLowerCase(), role: input.role })
+    .select(PLATFORM_INVITATION_SELECT)
+    .single()
+
+  if (error) {
+    throw error
+  }
+
+  return data as unknown as PlatformInvitation
+}
+
+export const revokePlatformInvitation = async (invitationId: string): Promise<void> => {
+  const { error } = await supabase.from('platform_invitations').delete().eq('id', invitationId)
 
   if (error) {
     throw error

@@ -1,22 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  createPlatformInvitation,
   getMyPlatformRole,
   getOrganisation,
   getPlatformOverview,
   listOrganisations,
+  listPlatformInvitations,
   listPlatformMembers,
   removePlatformMember,
+  revokePlatformInvitation,
   updatePlatformMemberRole,
 } from './platform'
 
 const query = vi.hoisted(() => {
   const builder = {
     select: vi.fn(),
+    insert: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
     eq: vi.fn(),
+    is: vi.fn(),
     or: vi.fn(),
     order: vi.fn(),
+    single: vi.fn(),
     maybeSingle: vi.fn(),
   }
   return { builder, from: vi.fn(() => builder) }
@@ -26,9 +32,10 @@ vi.mock('@/lib/supabase/supabase', () => ({ supabase: { from: query.from } }))
 
 beforeEach(() => {
   vi.clearAllMocks()
-  for (const fn of ['select', 'update', 'delete', 'eq', 'or', 'order'] as const) {
+  for (const fn of ['select', 'insert', 'update', 'delete', 'eq', 'is', 'or', 'order'] as const) {
     query.builder[fn].mockReset().mockReturnValue(query.builder)
   }
+  query.builder.single.mockReset()
   query.builder.maybeSingle.mockReset()
 })
 
@@ -165,5 +172,52 @@ describe('platform team writes', () => {
     query.builder.eq.mockResolvedValue({ error })
 
     await expect(removePlatformMember('user-1')).rejects.toBe(error)
+  })
+})
+
+describe('platform invitations', () => {
+  const invitation = {
+    id: 'inv-1',
+    email: 'grace@example.com',
+    role: 'support',
+    token: '0f4b9a1e-2c3d-4e5f-8a6b-7c8d9e0f1a2b',
+    invited_by: 'user-1',
+    expires_at: '2999-01-01T00:00:00Z',
+    accepted_at: null,
+    created_at: '',
+  }
+
+  it('lists the open ones', async () => {
+    query.builder.order.mockResolvedValue({ data: [invitation], error: null })
+
+    await expect(listPlatformInvitations()).resolves.toEqual([invitation])
+    expect(query.from).toHaveBeenCalledWith('platform_invitations')
+    expect(query.builder.is).toHaveBeenCalledWith('accepted_at', null)
+  })
+
+  it('creates one with a normalised email and returns it with its token', async () => {
+    query.builder.single.mockResolvedValue({ data: invitation, error: null })
+
+    await expect(
+      createPlatformInvitation({ email: ' Grace@Example.com ', role: 'support' }),
+    ).resolves.toEqual(invitation)
+    expect(query.builder.insert).toHaveBeenCalledWith({
+      email: 'grace@example.com',
+      role: 'support',
+    })
+    expect(query.builder.select).toHaveBeenCalledWith(expect.stringContaining('token'))
+  })
+
+  it('revokes by id and throws the Supabase error', async () => {
+    query.builder.eq.mockResolvedValueOnce({ error: null })
+    await revokePlatformInvitation('inv-1')
+    expect(query.builder.delete).toHaveBeenCalled()
+    expect(query.builder.eq).toHaveBeenCalledWith('id', 'inv-1')
+
+    const error = new Error('new row violates row-level security policy')
+    query.builder.single.mockResolvedValue({ data: null, error })
+    await expect(
+      createPlatformInvitation({ email: 'x@example.com', role: 'superadmin' }),
+    ).rejects.toBe(error)
   })
 })
