@@ -301,6 +301,13 @@ create policy "memberships_delete_manager_by_tier"
   to authenticated
   using (public.can_manage_org_member(org_id, role));
 
+-- Anyone may leave. (The last owner cannot: see protect_last_owner() below.)
+create policy "memberships_delete_self"
+  on public.memberships
+  for delete
+  to authenticated
+  using (user_id = (select auth.uid()));
+
 -- An organisation with no owner cannot be administered. Refuse the change that would cause
 -- it — unless the organisation itself is being deleted and its rows are cascading away.
 create or replace function public.protect_last_owner()
@@ -329,6 +336,27 @@ $$;
 create trigger memberships_protect_last_owner
   before update of role or delete on public.memberships
   for each row execute function public.protect_last_owner();
+
+-- Someone who leaves (or is removed) should not still "be working in" that organisation:
+-- clear the pointer so the app falls back to another of their organisations. Definer, since a
+-- manager removing someone else may not touch that person's profile.
+create or replace function public.forget_left_org()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.profiles
+  set active_org_id = null
+  where id = old.user_id and active_org_id = old.org_id;
+  return old;
+end;
+$$;
+
+create trigger memberships_forget_left_org
+  after delete on public.memberships
+  for each row execute function public.forget_left_org();
 
 -- Every staff member can see the team; only the tiers above a row may change or remove it,
 -- and nobody may promote past their own tier.
