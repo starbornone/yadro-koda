@@ -25,6 +25,8 @@ vi.mock('./pages/reset-password-page', () => ({
 }))
 vi.mock('./pages/onboarding-page', () => ({ OnboardingPage: () => <div>onboarding page</div> }))
 vi.mock('./pages/org-settings-page', () => ({ OrgSettingsPage: () => <div>settings page</div> }))
+vi.mock('./pages/members-page', () => ({ MembersPage: () => <div>members page</div> }))
+vi.mock('./pages/invite-page', () => ({ InvitePage: () => <div>invite page</div> }))
 vi.mock('./pages/new-organisation-page', () => ({
   NewOrganisationPage: () => <div>new org page</div>,
 }))
@@ -69,8 +71,12 @@ vi.mock('@/lib/auth/auth-store', () => ({ authStore: fakeStore.authStore }))
 const getMyProfile = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/supabase/profiles', () => ({ getMyProfile }))
 
-const getMyMemberships = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/supabase/organisations', () => ({ getMyMemberships }))
+const organisations = vi.hoisted(() => ({ getMyMemberships: vi.fn(), listMembers: vi.fn() }))
+vi.mock('@/lib/supabase/organisations', () => organisations)
+const { getMyMemberships } = organisations
+
+const invitations = vi.hoisted(() => ({ getInvitation: vi.fn(), listInvitations: vi.fn() }))
+vi.mock('@/lib/supabase/invitations', () => invitations)
 
 const platform = vi.hoisted(() => ({
   getMyPlatformRole: vi.fn(),
@@ -118,6 +124,9 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ id: 'user-1', display_name: 'Ada', active_org_id: null })
   getMyMemberships.mockReset().mockResolvedValue([membership('org-1')])
+  organisations.listMembers.mockReset().mockResolvedValue([])
+  invitations.getInvitation.mockReset().mockResolvedValue(null)
+  invitations.listInvitations.mockReset().mockResolvedValue([])
   platform.getMyPlatformRole.mockReset().mockResolvedValue(null)
   platform.getPlatformOverview
     .mockReset()
@@ -301,6 +310,51 @@ describe('organisations', () => {
     const app = router.state.matches.find((match) => match.routeId === '/_authenticated/_app')
     expect(app?.loaderData).toMatchObject({ org: { id: 'org-1' }, role: 'owner' })
   })
+
+  it('loads members for everyone but invitations only for managers', async () => {
+    renderAt('/app/members')
+    expect(await screen.findByText('members page')).toBeInTheDocument()
+    expect(organisations.listMembers).toHaveBeenCalledWith('org-1')
+    expect(invitations.listInvitations).toHaveBeenCalledWith('org-1')
+
+    cleanup()
+    invitations.listInvitations.mockClear()
+    getMyMemberships.mockResolvedValue([membership('org-1', 'member')])
+    renderAt('/app/members')
+    expect(await screen.findByText('members page')).toBeInTheDocument()
+    expect(invitations.listInvitations).not.toHaveBeenCalled()
+  })
+})
+
+describe('invitation links', () => {
+  const token = '0f4b9a1e-2c3d-4e5f-8a6b-7c8d9e0f1a2b'
+
+  it('opens for a signed-out visitor without touching their profile', async () => {
+    fakeStore.set(signedOut)
+    const router = renderAt(`/invite/${token}`)
+
+    expect(await screen.findByText('invite page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe(`/invite/${token}`)
+    expect(invitations.getInvitation).toHaveBeenCalledWith(token)
+    expect(getMyProfile).not.toHaveBeenCalled()
+  })
+
+  it('opens for a signed-in visitor too', async () => {
+    fakeStore.set(signedIn)
+    renderAt(`/invite/${token}`)
+
+    expect(await screen.findByText('invite page')).toBeInTheDocument()
+    expect(invitations.getInvitation).toHaveBeenCalledWith(token)
+  })
+
+  it('sends a recovery session to the reset page first', async () => {
+    fakeStore.set(inRecovery)
+    const router = renderAt(`/invite/${token}`)
+
+    expect(await screen.findByText('reset page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/reset-password')
+    expect(invitations.getInvitation).not.toHaveBeenCalled()
+  })
 })
 
 describe('account chooser', () => {
@@ -410,7 +464,7 @@ describe('staff', () => {
     expect(crm.getCustomerRecord).toHaveBeenCalledWith('nope')
   })
 
-  it('loads the customer record alongside the organisation', async () => {
+  it('loads the customer record and open invitations alongside the organisation', async () => {
     platform.getMyPlatformRole.mockResolvedValue('support')
     platform.getOrganisation.mockResolvedValue({ id: 'org-1', name: 'Acme', members: [] })
     crm.getCustomerRecord.mockResolvedValue({
@@ -423,6 +477,7 @@ describe('staff', () => {
 
     expect(await screen.findByText('staff organisation')).toBeInTheDocument()
     expect(platform.listPlatformMembers).toHaveBeenCalled()
+    expect(invitations.listInvitations).toHaveBeenCalledWith('org-1')
   })
 
   it('loads the pipeline and the viewer’s tasks for the overview', async () => {

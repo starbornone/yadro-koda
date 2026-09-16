@@ -12,7 +12,7 @@ import { PublicLayout } from '@/components/layout/public-layout'
 import { RouteError, RouteNotFound, RoutePending } from '@/components/router/route-fallbacks'
 import { authStore } from '@/lib/auth/auth-store'
 import { readResetLinkError } from '@/lib/auth/password-reset'
-import { canOnPlatform } from '@/lib/auth/permissions'
+import { canInOrg, canOnPlatform } from '@/lib/auth/permissions'
 import {
   getCustomerRecord,
   getStageCounts,
@@ -20,7 +20,8 @@ import {
   listMyOpenTasks,
   type CustomerStage,
 } from '@/lib/supabase/crm'
-import { getMyMemberships } from '@/lib/supabase/organisations'
+import { getInvitation, listInvitations } from '@/lib/supabase/invitations'
+import { getMyMemberships, listMembers } from '@/lib/supabase/organisations'
 import {
   getMyPlatformRole,
   getOrganisation,
@@ -132,6 +133,29 @@ const resetPasswordRoute = createRoute({
   },
   head: () => ({ meta: [{ title: 'Reset your password' }] }),
   component: lazyRouteComponent(() => import('./pages/reset-password-page'), 'ResetPasswordPage'),
+})
+
+// The landing page for an invitation link. Anyone may open it — the invitee usually has no
+// account yet — so it sits outside `_authenticated` and reads the session itself: signed out,
+// it explains what the link is for and which address to sign in with; signed in with that
+// address, it offers to join. Accepting is a button, never a side effect of loading, because
+// links are prefetched on hover.
+const inviteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/invite/$token',
+  beforeLoad: async () => {
+    await authStore.ready()
+    const auth = authStore.getSnapshot()
+
+    if (auth.status === 'signed-in' && auth.passwordRecovery) {
+      throw redirect({ to: '/reset-password' })
+    }
+
+    return { user: auth.status === 'signed-in' ? auth.user : null }
+  },
+  loader: ({ params }) => getInvitation(params.token),
+  head: () => ({ meta: [{ title: 'Invitation' }] }),
+  component: lazyRouteComponent(() => import('./pages/invite-page'), 'InvitePage'),
 })
 
 // ---------------------------------------------------------------------------
@@ -265,6 +289,23 @@ const orgSettingsRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/org-settings-page'), 'OrgSettingsPage'),
 })
 
+// Everyone sees who belongs; only managers see the open invitations (RLS would hide them
+// anyway, so this just saves the request).
+const membersRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/app/members',
+  loader: async ({ parentMatchPromise }) => {
+    const { org, role } = await guardedBy(parentMatchPromise)
+    const [members, invitations] = await Promise.all([
+      listMembers(org.id),
+      canInOrg(role, 'org:manage-members') ? listInvitations(org.id) : [],
+    ])
+    return { members, invitations }
+  },
+  head: () => ({ meta: [{ title: 'Members' }] }),
+  component: lazyRouteComponent(() => import('./pages/members-page'), 'MembersPage'),
+})
+
 const newOrganisationRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/app/organisations/new',
@@ -359,20 +400,21 @@ const staffNewOrganisationRoute = createRoute({
   ),
 })
 
-// One organisation as staff see it: the tenant (members) plus its whole CRM record, and the
-// staff list for owner/assignee choices.
+// One organisation as staff see it: the tenant (members, open invitations) plus its whole CRM
+// record, and the staff list for owner/assignee choices.
 const staffOrganisationRoute = createRoute({
   getParentRoute: () => staffRoute,
   path: '/staff/organisations/$orgId',
   loader: async ({ params, parentMatchPromise }) => {
     await guardedBy(parentMatchPromise)
-    const [organisation, record, staff] = await Promise.all([
+    const [organisation, record, staff, invitations] = await Promise.all([
       getOrganisation(params.orgId),
       getCustomerRecord(params.orgId),
       listPlatformMembers(),
+      listInvitations(params.orgId),
     ])
     if (!organisation || !record) throw notFound()
-    return { organisation, ...record, staff }
+    return { organisation, ...record, staff, invitations }
   },
   head: ({ loaderData }) => ({
     meta: [{ title: loaderData?.organisation.name ?? 'Organisation' }],
@@ -406,10 +448,17 @@ const routeTree = rootRoute.addChildren([
   loginRoute,
   signUpRoute,
   resetPasswordRoute,
+  inviteRoute,
   authenticatedRoute.addChildren([
     accountsRoute,
     onboardingRoute,
-    appRoute.addChildren([dashboardRoute, orgSettingsRoute, newOrganisationRoute, profileRoute]),
+    appRoute.addChildren([
+      dashboardRoute,
+      orgSettingsRoute,
+      membersRoute,
+      newOrganisationRoute,
+      profileRoute,
+    ]),
     staffRoute.addChildren([
       staffOverviewRoute,
       staffOrganisationsRoute,
