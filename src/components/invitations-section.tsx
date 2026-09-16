@@ -17,51 +17,61 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useRouteAction } from '@/hooks/use-route-action'
-import { ORG_ROLE_LABELS } from '@/lib/auth/permissions'
 import { formatDateTime } from '@/lib/format'
-import {
-  createInvitation,
-  invitationLink,
-  invitationStatus,
-  revokeInvitation,
-  type Invitation,
-} from '@/lib/supabase/invitations'
-import type { OrgRole } from '@/lib/supabase/organisations'
+import { invitationLink, invitationStatus } from '@/lib/supabase/invitations'
 
-type InvitationsSectionProps = {
-  orgId: string
+/** What the section needs from an invitation, whichever table it came from. */
+export type OpenInvitation<Role extends string> = {
+  id: string
+  email: string
+  role: Role
+  token: string
+  expires_at: string
+}
+
+type InvitationsSectionProps<Role extends string> = {
   /** Open invitations: pending and expired. Accepted ones are not shown. */
-  invitations: Invitation[]
+  invitations: OpenInvitation<Role>[]
   /** The roles the viewer may invite as. Render the section only when there is at least one. */
-  assignableRoles: readonly OrgRole[]
+  assignableRoles: readonly Role[]
+  roleLabels: Record<Role, string>
+  /** Shown under the heading: who this invites, and to what. */
+  description: string
+  create: (input: { email: string; role: Role }) => Promise<OpenInvitation<Role>>
+  revoke: (invitationId: string) => Promise<void>
 }
 
 /**
- * Inviting people and the invitations still open. Nothing is emailed: the app builds a link
- * from each invitation's token and the inviter passes it on however they like.
+ * Inviting people and the invitations still open — to an organisation or to the staff team,
+ * whichever `create` and `revoke` talk to. Nothing is emailed: the app builds a link from each
+ * invitation's token and the inviter passes it on however they like.
  */
-export const InvitationsSection = ({
-  orgId,
+export function InvitationsSection<Role extends string>({
   invitations,
   assignableRoles,
-}: InvitationsSectionProps) => {
+  roleLabels,
+  description,
+  create,
+  revoke,
+}: InvitationsSectionProps<Role>) {
   const { busy, error, run } = useRouteAction()
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState<OrgRole>(assignableRoles.at(-1) ?? 'member')
+  // Default to the least privileged role on offer.
+  const [role, setRole] = useState<Role>(assignableRoles.at(-1)!)
   // The invitation just created, so its link can be shown right away.
-  const [created, setCreated] = useState<Invitation | null>(null)
+  const [created, setCreated] = useState<OpenInvitation<Role> | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [copyError, setCopyError] = useState<string | null>(null)
 
   const handleInvite = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     void run('invite', async () => {
-      setCreated(await createInvitation(orgId, { email, role }))
+      setCreated(await create({ email, role }))
       setEmail('')
     })
   }
 
-  const copyLink = async (invitation: Invitation) => {
+  const copyLink = async (invitation: OpenInvitation<Role>) => {
     setCopyError(null)
     try {
       await navigator.clipboard.writeText(invitationLink(invitation.token))
@@ -79,10 +89,7 @@ export const InvitationsSection = ({
         <h2 id="invitations-heading" className="text-base font-medium">
           Invitations
         </h2>
-        <p className="text-sm text-muted-foreground">
-          Invite someone by email, then send them the link. They join once they sign in with that
-          address and open it.
-        </p>
+        <p className="text-sm text-muted-foreground">{description}</p>
       </div>
 
       <form onSubmit={handleInvite} className="max-w-md">
@@ -105,11 +112,11 @@ export const InvitationsSection = ({
               <NativeSelect
                 id="invite-role"
                 value={role}
-                onChange={(event) => setRole(event.target.value as OrgRole)}
+                onChange={(event) => setRole(event.target.value as Role)}
               >
                 {assignableRoles.map((option) => (
                   <NativeSelectOption key={option} value={option}>
-                    {ORG_ROLE_LABELS[option]}
+                    {roleLabels[option]}
                   </NativeSelectOption>
                 ))}
               </NativeSelect>
@@ -180,7 +187,7 @@ export const InvitationsSection = ({
                 return (
                   <TableRow key={invitation.id}>
                     <TableCell className="font-medium">{invitation.email}</TableCell>
-                    <TableCell>{ORG_ROLE_LABELS[invitation.role]}</TableCell>
+                    <TableCell>{roleLabels[invitation.role]}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {expired ? (
                         <Badge variant="destructive">Expired</Badge>
@@ -209,9 +216,7 @@ export const InvitationsSection = ({
                             title={`Revoke the invitation for ${invitation.email}?`}
                             description="The link stops working. You can invite them again afterwards."
                             actionLabel="Revoke"
-                            onConfirm={() =>
-                              void run(invitation.id, () => revokeInvitation(invitation.id))
-                            }
+                            onConfirm={() => void run(invitation.id, () => revoke(invitation.id))}
                           >
                             <Trash2Icon />
                           </ConfirmButton>
