@@ -1,4 +1,5 @@
 import { CircleAlertIcon, CircleCheckIcon } from 'lucide-react'
+import { InvitationsSection } from '@/components/invitations-section'
 import { PageHeader } from '@/components/layout/page-header'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -9,11 +10,12 @@ import { ContactsSection } from '@/features/crm/components/contacts-section'
 import { PipelineForm } from '@/features/crm/components/pipeline-form'
 import { StageBadge } from '@/features/crm/components/stage-badge'
 import { TasksSection } from '@/features/crm/components/tasks-section'
-import { InvitationsSection } from '@/features/organisations/components/invitations-section'
 import { MembersSection } from '@/features/organisations/components/members-section'
 import { useStaffOrganisationPage } from '@/features/staff/hooks/use-staff-organisation-page'
 import { personName } from '@/lib/auth/display-user'
+import { ORG_ROLE_LABELS } from '@/lib/auth/permissions'
 import { formatDate } from '@/lib/format'
+import { createInvitation, revokeInvitation } from '@/lib/supabase/invitations'
 
 /**
  * The customer record: one organisation as staff see it — where it sits in the pipeline, who
@@ -112,9 +114,12 @@ export const StaffOrganisationPage = () => {
 
         {assignableRoles.length > 0 ? (
           <InvitationsSection
-            orgId={organisation.id}
             invitations={invitations}
             assignableRoles={assignableRoles}
+            roleLabels={ORG_ROLE_LABELS}
+            description="Invite someone to this organisation on its behalf, then send them the link. They join once they sign in with that address and open it."
+            create={(input) => createInvitation(organisation.id, input)}
+            revoke={revokeInvitation}
           />
         ) : null}
 
