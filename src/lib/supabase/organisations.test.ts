@@ -2,8 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createOrganisation,
   getMyMemberships,
+  listMembers,
+  removeMember,
   setActiveOrganisation,
   slugify,
+  updateMembershipRole,
   updateOrganisation,
 } from './organisations'
 
@@ -11,12 +14,14 @@ const query = vi.hoisted(() => {
   const builder = {
     select: vi.fn(),
     update: vi.fn(),
+    delete: vi.fn(),
     eq: vi.fn(),
     order: vi.fn(),
     maybeSingle: vi.fn(),
   }
   builder.select.mockReturnValue(builder)
   builder.update.mockReturnValue(builder)
+  builder.delete.mockReturnValue(builder)
   return { builder, from: vi.fn(() => builder), rpc: vi.fn() }
 })
 
@@ -30,6 +35,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   query.builder.select.mockReturnValue(query.builder)
   query.builder.update.mockReturnValue(query.builder)
+  query.builder.delete.mockReturnValue(query.builder)
   query.builder.eq.mockReturnValue(query.builder)
   query.builder.order.mockReset()
   query.builder.maybeSingle.mockReset()
@@ -93,6 +99,46 @@ describe('updateOrganisation', () => {
     expect(query.from).toHaveBeenCalledWith('organisations')
     expect(query.builder.update).toHaveBeenCalledWith({ name: 'Acme Ltd' })
     expect(query.builder.eq).toHaveBeenCalledWith('id', 'org-1')
+  })
+})
+
+describe('members', () => {
+  it('lists an organisation’s members with their profiles', async () => {
+    const member = {
+      user_id: 'user-2',
+      role: 'member',
+      expires_at: null,
+      created_at: '',
+      profile: { id: 'user-2', display_name: 'Grace', email: null },
+    }
+    query.builder.order.mockReturnValueOnce(query.builder).mockResolvedValueOnce({
+      data: [member],
+      error: null,
+    })
+
+    await expect(listMembers('org-1')).resolves.toEqual([member])
+    expect(query.from).toHaveBeenCalledWith('memberships')
+    expect(query.builder.select).toHaveBeenCalledWith(expect.stringContaining('profile:profiles('))
+    expect(query.builder.eq).toHaveBeenCalledWith('org_id', 'org-1')
+  })
+
+  it('changes one membership’s role', async () => {
+    query.builder.eq.mockReturnValueOnce(query.builder).mockResolvedValueOnce({ error: null })
+
+    await updateMembershipRole('org-1', 'user-2', 'admin')
+
+    expect(query.builder.update).toHaveBeenCalledWith({ role: 'admin' })
+    expect(query.builder.eq).toHaveBeenNthCalledWith(1, 'org_id', 'org-1')
+    expect(query.builder.eq).toHaveBeenNthCalledWith(2, 'user_id', 'user-2')
+  })
+
+  it('removes one membership and surfaces the last-owner refusal', async () => {
+    const error = new Error('cannot remove the last owner')
+    query.builder.eq.mockReturnValueOnce(query.builder).mockResolvedValueOnce({ error })
+
+    await expect(removeMember('org-1', 'user-1')).rejects.toBe(error)
+    expect(query.builder.delete).toHaveBeenCalled()
+    expect(query.builder.eq).toHaveBeenNthCalledWith(2, 'user_id', 'user-1')
   })
 })
 

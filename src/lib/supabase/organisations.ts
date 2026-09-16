@@ -17,8 +17,26 @@ export type Membership = {
   organisation: Organisation
 }
 
+/** The subset of another person's profile that colleagues may see. */
+export type PublicProfile = {
+  id: string
+  display_name: string | null
+  email: string | null
+}
+
+/** One organisation's membership as its members (and staff) see it, with the person embedded. */
+export type OrganisationMember = {
+  user_id: string
+  role: OrgRole
+  expires_at: string | null
+  created_at: string
+  profile: PublicProfile
+}
+
 const MEMBERSHIP_SELECT =
   'org_id, role, expires_at, organisation:organisations(id, name, slug, created_at)'
+export const MEMBER_SELECT =
+  'user_id, role, expires_at, created_at, profile:profiles(id, display_name, email)'
 
 /**
  * The caller's memberships (RLS hides expired ones from `org_role()` checks, but they are still
@@ -80,6 +98,55 @@ export const updateOrganisation = async (
   }
 
   return data
+}
+
+// ---------------------------------------------------------------------------
+// Members. Every member sees the list; owners and admins change roles and remove people, never
+// above their own tier, and the database keeps at least one owner (RLS + trigger).
+// ---------------------------------------------------------------------------
+
+/** Owners first, then by when they joined. */
+export const listMembers = async (orgId: string): Promise<OrganisationMember[]> => {
+  const { data, error } = await supabase
+    .from('memberships')
+    .select(MEMBER_SELECT)
+    .eq('org_id', orgId)
+    .order('role', { ascending: true })
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    throw error
+  }
+
+  return (data ?? []) as unknown as OrganisationMember[]
+}
+
+export const updateMembershipRole = async (
+  orgId: string,
+  userId: string,
+  role: OrgRole,
+): Promise<void> => {
+  const { error } = await supabase
+    .from('memberships')
+    .update({ role })
+    .eq('org_id', orgId)
+    .eq('user_id', userId)
+
+  if (error) {
+    throw error
+  }
+}
+
+export const removeMember = async (orgId: string, userId: string): Promise<void> => {
+  const { error } = await supabase
+    .from('memberships')
+    .delete()
+    .eq('org_id', orgId)
+    .eq('user_id', userId)
+
+  if (error) {
+    throw error
+  }
 }
 
 /** Remembers which organisation the user is working in. The DB rejects orgs they don't belong to. */
