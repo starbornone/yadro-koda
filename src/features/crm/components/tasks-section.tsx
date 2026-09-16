@@ -9,7 +9,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
-import { useCrmAction } from '@/features/crm/hooks/use-crm-action'
+import { useRouteAction } from '@/hooks/use-route-action'
 import { personName } from '@/lib/auth/display-user'
 import { formatDay, today } from '@/lib/format'
 import { addTask, removeTask, setTaskCompleted, type Task } from '@/lib/supabase/crm'
@@ -36,7 +36,7 @@ export const TasksSection = ({
   canLog,
   canManage,
 }: TasksSectionProps) => {
-  const { busy, error, run } = useCrmAction()
+  const { busy, error, run } = useRouteAction()
   const [title, setTitle] = useState('')
   const [dueOn, setDueOn] = useState('')
   const [assignedTo, setAssignedTo] = useState(currentUserId)
