@@ -3,6 +3,7 @@ import { getRouteApi, useNavigate, useRouter } from '@tanstack/react-router'
 import { useSignOut } from '@/features/auth/hooks/use-sign-out'
 import {
   acceptInvitation,
+  acceptPlatformInvitation,
   invitationStatus,
   type InvitationPreview,
 } from '@/lib/supabase/invitations'
@@ -31,8 +32,9 @@ const resolveView = (
 }
 
 /**
- * The invitation behind the link and what the visitor can do with it. `view` folds the
- * invitation's state and the session together so the page is a switch, not a decision tree.
+ * The invitation behind the link — to an organisation or to the staff team — and what the
+ * visitor can do with it. `view` folds the invitation's state and the session together so the
+ * page is a switch, not a decision tree.
  */
 export const useInvitePage = () => {
   const router = useRouter()
@@ -49,22 +51,26 @@ export const useInvitePage = () => {
   const view = resolveView(invitation, user !== null, currentEmail)
 
   const accept = useCallback(async () => {
-    if (isAccepting) return
+    if (isAccepting || !invitation) return
 
     setIsAccepting(true)
     setAcceptError(null)
 
     try {
-      await acceptInvitation(token)
-      // The `_authenticated` loader owns memberships and the active organisation; refreshing
-      // it is what lets `/app` open inside the organisation just joined.
+      if (invitation.kind === 'platform') {
+        await acceptPlatformInvitation(token)
+      } else {
+        await acceptInvitation(token)
+      }
+      // The `_authenticated` loader owns memberships, the platform role and the active
+      // organisation; refreshing it is what lets the destination open on what was just joined.
       await router.invalidate()
-      await navigate({ to: '/app' })
+      await navigate({ to: invitation.kind === 'platform' ? '/staff' : '/app' })
     } catch (error) {
       setAcceptError(error instanceof Error ? error.message : 'Could not accept the invitation.')
       setIsAccepting(false)
     }
-  }, [isAccepting, navigate, router, token])
+  }, [invitation, isAccepting, navigate, router, token])
 
   return {
     token,
