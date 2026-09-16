@@ -1,15 +1,13 @@
 import type { CustomerStage } from './crm'
-import type { OrgRole, Organisation } from './organisations'
+import {
+  MEMBER_SELECT,
+  type Organisation,
+  type OrganisationMember,
+  type PublicProfile,
+} from './organisations'
 import { supabase } from './supabase'
 
 export type PlatformRole = 'superadmin' | 'admin' | 'support'
-
-/** The subset of a colleague's profile other people may see. */
-export type PublicProfile = {
-  id: string
-  display_name: string | null
-  email: string | null
-}
 
 export type PlatformMember = {
   user_id: string
@@ -23,14 +21,6 @@ export type OrganisationSummary = Organisation & {
   member_count: number
   stage: CustomerStage
   owner: PublicProfile | null
-}
-
-export type OrganisationMember = {
-  user_id: string
-  role: OrgRole
-  expires_at: string | null
-  created_at: string
-  profile: PublicProfile
 }
 
 export type OrganisationDetail = Organisation & {
@@ -110,9 +100,7 @@ export const listOrganisations = async ({
 export const getOrganisation = async (orgId: string): Promise<OrganisationDetail | null> => {
   const { data, error } = await supabase
     .from('organisations')
-    .select(
-      'id, name, slug, created_at, members:memberships(user_id, role, expires_at, created_at, profile:profiles(id, display_name, email))',
-    )
+    .select(`id, name, slug, created_at, members:memberships(${MEMBER_SELECT})`)
     .eq('id', orgId)
     .maybeSingle()
 
