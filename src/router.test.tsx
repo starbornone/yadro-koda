@@ -84,6 +84,7 @@ const platform = vi.hoisted(() => ({
   listOrganisations: vi.fn(),
   getOrganisation: vi.fn(),
   listPlatformMembers: vi.fn(),
+  listPlatformInvitations: vi.fn(),
 }))
 vi.mock('@/lib/supabase/platform', () => platform)
 
@@ -134,6 +135,7 @@ beforeEach(() => {
   platform.listOrganisations.mockReset().mockResolvedValue([])
   platform.getOrganisation.mockReset().mockResolvedValue(null)
   platform.listPlatformMembers.mockReset().mockResolvedValue([])
+  platform.listPlatformInvitations.mockReset().mockResolvedValue([])
   crm.getCustomerRecord.mockReset().mockResolvedValue(null)
   crm.getStageCounts.mockReset().mockResolvedValue({})
   crm.listMyOpenTasks.mockReset().mockResolvedValue([])
@@ -478,6 +480,21 @@ describe('staff', () => {
     expect(await screen.findByText('staff organisation')).toBeInTheDocument()
     expect(platform.listPlatformMembers).toHaveBeenCalled()
     expect(invitations.listInvitations).toHaveBeenCalledWith('org-1')
+  })
+
+  it('loads team invitations for the tiers that manage the team', async () => {
+    platform.getMyPlatformRole.mockResolvedValue('admin')
+    renderAt('/staff/team')
+    expect(await screen.findByText('staff team')).toBeInTheDocument()
+    expect(platform.listPlatformMembers).toHaveBeenCalled()
+    expect(platform.listPlatformInvitations).toHaveBeenCalled()
+
+    cleanup()
+    platform.listPlatformInvitations.mockClear()
+    platform.getMyPlatformRole.mockResolvedValue('support')
+    renderAt('/staff/team')
+    expect(await screen.findByText('staff team')).toBeInTheDocument()
+    expect(platform.listPlatformInvitations).not.toHaveBeenCalled()
   })
 
   it('loads the pipeline and the viewer’s tasks for the overview', async () => {

@@ -27,6 +27,7 @@ import {
   getOrganisation,
   getPlatformOverview,
   listOrganisations,
+  listPlatformInvitations,
   listPlatformMembers,
 } from '@/lib/supabase/platform'
 import { getMyProfile } from '@/lib/supabase/profiles'
@@ -425,12 +426,18 @@ const staffOrganisationRoute = createRoute({
   ),
 })
 
+// Everyone on staff sees the team; only the tiers that manage it see the open invitations
+// (they are the only ones who can act on them).
 const staffTeamRoute = createRoute({
   getParentRoute: () => staffRoute,
   path: '/staff/team',
   loader: async ({ parentMatchPromise }) => {
-    await guardedBy(parentMatchPromise)
-    return listPlatformMembers()
+    const { platformRole } = await guardedBy(parentMatchPromise)
+    const [members, invitations] = await Promise.all([
+      listPlatformMembers(),
+      canOnPlatform(platformRole, 'platform:manage-team') ? listPlatformInvitations() : [],
+    ])
+    return { members, invitations }
   },
   head: () => ({ meta: [{ title: 'Team' }] }),
   component: lazyRouteComponent(() => import('./pages/staff/staff-team-page'), 'StaffTeamPage'),
