@@ -78,11 +78,11 @@ const invitations: Invitation[] = [
   },
 ]
 
-const renderPage = (role: OrgRole = 'owner') =>
+const renderPage = (role: OrgRole = 'owner', roster: OrganisationMember[] = members) =>
   renderAuthenticated(<MembersPage />, {
     role,
     path: '/app/members',
-    loaderData: { members, invitations: role === 'member' ? [] : invitations },
+    loaderData: { members: roster, invitations: role === 'member' ? [] : invitations },
   })
 
 beforeEach(() => {
@@ -237,5 +237,50 @@ describe('MembersPage', () => {
     await user.click(section.getByRole('button', { name: 'Revoke invitation for old@example.com' }))
     await user.click(await screen.findByRole('button', { name: 'Revoke' }))
     expect(invitationsApi.revokeInvitation).toHaveBeenCalledWith('inv-2')
+  })
+
+  it('lets a member leave after confirming, then opens the dashboard', async () => {
+    const user = userEvent.setup()
+    const { router } = renderPage('member')
+    const invalidate = vi.spyOn(router, 'invalidate')
+
+    await user.click(await screen.findByRole('button', { name: 'Leave organisation' }))
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent('Leave Acme?')
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(organisations.removeMember).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Leave organisation' }))
+    await user.click(await screen.findByRole('button', { name: 'Leave' }))
+
+    expect(organisations.removeMember).toHaveBeenCalledWith('org-1', 'user-1')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/app'))
+    expect(invalidate).toHaveBeenCalled()
+  })
+
+  it('stops the only owner from leaving and says why', async () => {
+    renderPage('owner', [members[0]!, members[2]!])
+
+    expect(await screen.findByRole('button', { name: 'Leave organisation' })).toBeDisabled()
+    expect(screen.getByText(/You're the only owner/)).toBeInTheDocument()
+  })
+
+  it('lets an owner leave when another owner remains', async () => {
+    renderPage('owner')
+
+    expect(await screen.findByRole('button', { name: 'Leave organisation' })).toBeEnabled()
+    expect(screen.queryByText(/You're the only owner/)).not.toBeInTheDocument()
+  })
+
+  it('surfaces a refusal to leave and lets the viewer try again', async () => {
+    organisations.removeMember.mockRejectedValue(new Error('cannot remove the last owner'))
+    const user = userEvent.setup()
+    const { router } = renderPage('owner')
+
+    await user.click(await screen.findByRole('button', { name: 'Leave organisation' }))
+    await user.click(await screen.findByRole('button', { name: 'Leave' }))
+
+    expect(await screen.findByText('cannot remove the last owner')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Leave organisation' })).toBeEnabled()
+    expect(router.state.location.pathname).toBe('/app/members')
   })
 })
