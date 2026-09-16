@@ -5,7 +5,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { AuthLayout } from '@/features/auth/components/auth-layout'
 import { useInvitePage } from '@/features/organisations/hooks/use-invite-page'
-import { ORG_ROLE_LABELS } from '@/lib/auth/permissions'
+import { ORG_ROLE_LABELS, PLATFORM_ROLE_LABELS } from '@/lib/auth/permissions'
+import type { InvitationPreview } from '@/lib/supabase/invitations'
 
 const Screen = ({
   title,
@@ -31,6 +32,12 @@ const HomeLink = () => (
   </Button>
 )
 
+/** What the link joins, and as what — worded to follow "invited you to join …". */
+const describe = (invitation: InvitationPreview) =>
+  invitation.kind === 'platform'
+    ? { target: 'the staff team', role: PLATFORM_ROLE_LABELS[invitation.role].toLowerCase() }
+    : { target: invitation.organisation_name, role: ORG_ROLE_LABELS[invitation.role].toLowerCase() }
+
 /** Where an invitation link lands. One screen per state; `useInvitePage` picks which. */
 export const InvitePage = () => {
   const {
@@ -46,7 +53,7 @@ export const InvitePage = () => {
   } = useInvitePage()
 
   const inviter = invitation?.invited_by_name ?? 'Someone'
-  const role = invitation ? ORG_ROLE_LABELS[invitation.role].toLowerCase() : ''
+  const { target, role } = invitation ? describe(invitation) : { target: '', role: '' }
 
   return (
     <AuthLayout>
@@ -57,8 +64,8 @@ export const InvitePage = () => {
         </Screen>
       ) : view === 'expired' ? (
         <Screen title="This invitation has expired" actions={<HomeLink />}>
-          {inviter} invited you to join {invitation.organisation_name}, but links only last 7 days.
-          Ask them for a new one.
+          {inviter} invited you to join {target}, but links only last 7 days. Ask them for a new
+          one.
         </Screen>
       ) : view === 'accepted' ? (
         <Screen
@@ -69,12 +76,12 @@ export const InvitePage = () => {
             </Button>
           }
         >
-          If that was you, you already belong to {invitation.organisation_name}. Otherwise, ask
-          whoever invited you for a new link.
+          If that was you, you already belong to {target}. Otherwise, ask whoever invited you for a
+          new link.
         </Screen>
       ) : view === 'signed-out' ? (
         <Screen
-          title={`Join ${invitation.organisation_name}`}
+          title={`Join ${target}`}
           actions={
             <>
               <Button asChild>
@@ -90,7 +97,7 @@ export const InvitePage = () => {
             </>
           }
         >
-          {inviter} invited you to join {invitation.organisation_name} as {role}. Sign in with{' '}
+          {inviter} invited you to join {target} as {role}. Sign in with{' '}
           <strong>{invitation.email}</strong> to accept.
         </Screen>
       ) : view === 'wrong-account' ? (
@@ -107,7 +114,7 @@ export const InvitePage = () => {
         </Screen>
       ) : (
         <Screen
-          title={`Join ${invitation.organisation_name}?`}
+          title={`Join ${target}?`}
           actions={
             <>
               <Button onClick={() => void accept()} disabled={isAccepting}>

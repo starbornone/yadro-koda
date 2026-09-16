@@ -16,19 +16,34 @@ import { InvitePage } from './invite-page'
 const auth = vi.hoisted(() => ({ signOut: vi.fn() }))
 vi.mock('@/lib/supabase/supabase', () => ({ supabase: { auth } }))
 
-const acceptInvitation = vi.hoisted(() => vi.fn())
+const accept = vi.hoisted(() => ({
+  acceptInvitation: vi.fn(),
+  acceptPlatformInvitation: vi.fn(),
+}))
 vi.mock('@/lib/supabase/invitations', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/supabase/invitations')>()),
-  acceptInvitation,
+  ...accept,
 }))
+const { acceptInvitation, acceptPlatformInvitation } = accept
 
 const TOKEN = '0f4b9a1e-2c3d-4e5f-8a6b-7c8d9e0f1a2b'
 
 const pending: InvitationPreview = {
+  kind: 'organisation',
   organisation_name: 'Acme',
   email: 'grace@example.com',
   role: 'admin',
   invited_by_name: 'Ada',
+  expires_at: '2999-01-01T00:00:00Z',
+  accepted_at: null,
+}
+
+const staffPending: InvitationPreview = {
+  kind: 'platform',
+  organisation_name: null,
+  email: 'grace@example.com',
+  role: 'support',
+  invited_by_name: 'Linus',
   expires_at: '2999-01-01T00:00:00Z',
   accepted_at: null,
 }
@@ -52,6 +67,7 @@ const renderInvite = (invitation: InvitationPreview | null, user: User | null) =
       inviteRoute,
       stub('/'),
       stub('/app'),
+      stub('/staff'),
       stub('/accounts'),
       stub('/login'),
       stub('/signup'),
@@ -63,6 +79,7 @@ const renderInvite = (invitation: InvitationPreview | null, user: User | null) =
 
 beforeEach(() => {
   acceptInvitation.mockReset()
+  acceptPlatformInvitation.mockReset()
   auth.signOut.mockReset().mockResolvedValue({ error: null })
 })
 
@@ -154,5 +171,26 @@ describe('InvitePage', () => {
       await screen.findByText('invitation was sent to a different email address'),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Accept invitation' })).toBeEnabled()
+  })
+
+  it('accepts a staff-team invitation and opens the staff area', async () => {
+    acceptPlatformInvitation.mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    const { router } = renderInvite(staffPending, grace)
+
+    expect(await screen.findByRole('heading', { name: 'Join the staff team?' })).toBeInTheDocument()
+    expect(screen.getByText(/Linus invited you to join as support/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Accept invitation' }))
+
+    expect(acceptPlatformInvitation).toHaveBeenCalledWith(TOKEN)
+    expect(acceptInvitation).not.toHaveBeenCalled()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/staff'))
+  })
+
+  it('describes a staff-team invitation to a signed-out visitor', async () => {
+    renderInvite(staffPending, null)
+
+    expect(await screen.findByRole('heading', { name: 'Join the staff team' })).toBeInTheDocument()
+    expect(screen.getByText(/invited you to join the staff team as support/)).toBeInTheDocument()
   })
 })
