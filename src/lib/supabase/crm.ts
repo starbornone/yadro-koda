@@ -1,4 +1,5 @@
 import type { Organisation, PublicProfile } from './organisations'
+import { requireRow } from './require-row'
 import { supabase } from './supabase'
 
 /**
@@ -81,17 +82,22 @@ export type CustomerRecord = {
   tasks: Task[]
 }
 
+// Select strings stay literal types (`as const`) so the client can infer each row's shape,
+// embeds included, from the generated `Database`.
 const PROFILE_SELECT = 'id, display_name, email'
 // A staff member reached through platform_members (owner, assignee): unwrap to the profile.
-const STAFF_EMBED = `user_id, profile:profiles(${PROFILE_SELECT})`
+const STAFF_EMBED = `user_id, profile:profiles(${PROFILE_SELECT})` as const
 type StaffEmbed = { user_id: string; profile: PublicProfile } | null
 const profileOf = (staff: StaffEmbed | undefined) => staff?.profile ?? null
 
-const CUSTOMER_SELECT = `org_id, stage, owner_id, source, updated_at, owner:platform_members(${STAFF_EMBED})`
+const CUSTOMER_SELECT =
+  `org_id, stage, owner_id, source, updated_at, owner:platform_members(${STAFF_EMBED})` as const
 const CONTACT_SELECT =
   'id, org_id, name, email, phone, title, is_primary, user_id, created_by, created_at'
-const ACTIVITY_SELECT = `id, org_id, contact_id, kind, body, occurred_at, created_by, author:profiles(${PROFILE_SELECT})`
-const TASK_SELECT = `id, org_id, title, due_on, assigned_to, completed_at, created_by, created_at, assignee:platform_members(${STAFF_EMBED})`
+const ACTIVITY_SELECT =
+  `id, org_id, contact_id, kind, body, occurred_at, created_by, author:profiles(${PROFILE_SELECT})` as const
+const TASK_SELECT =
+  `id, org_id, title, due_on, assigned_to, completed_at, created_by, created_at, assignee:platform_members(${STAFF_EMBED})` as const
 
 type TaskRow = Omit<Task, 'assignee'> & { assignee: StaffEmbed }
 const toTask = <T extends TaskRow>({ assignee, ...task }: T) => ({
@@ -115,7 +121,7 @@ export const getCustomer = async (orgId: string): Promise<Customer | null> => {
   }
   if (!data) return null
 
-  const { owner, ...customer } = data as unknown as Omit<Customer, 'owner'> & { owner: StaffEmbed }
+  const { owner, ...customer } = data
   return { ...customer, owner: profileOf(owner) }
 }
 
@@ -131,7 +137,7 @@ export const listContacts = async (orgId: string): Promise<Contact[]> => {
     throw error
   }
 
-  return (data ?? []) as unknown as Contact[]
+  return data
 }
 
 /** Newest first. */
@@ -146,7 +152,7 @@ export const listActivities = async (orgId: string): Promise<Activity[]> => {
     throw error
   }
 
-  return (data ?? []) as unknown as Activity[]
+  return data
 }
 
 /** Open tasks first (soonest due, undated last), then completed. */
@@ -162,7 +168,7 @@ export const listTasks = async (orgId: string): Promise<Task[]> => {
     throw error
   }
 
-  return ((data ?? []) as unknown as TaskRow[]).map(toTask)
+  return data.map(toTask)
 }
 
 /** Everything the customer page shows, or null when the organisation has no CRM record. */
@@ -199,7 +205,7 @@ export const getStageCounts = async (): Promise<Record<CustomerStage, number>> =
 export const listMyOpenTasks = async (userId: string): Promise<TaskWithOrganisation[]> => {
   const { data, error } = await supabase
     .from('tasks')
-    .select(`${TASK_SELECT}, organisation:organisations(id, name)`)
+    .select(`${TASK_SELECT}, organisation:organisations(id, name)` as const)
     .eq('assigned_to', userId)
     .is('completed_at', null)
     .order('due_on', { ascending: true, nullsFirst: false })
@@ -209,8 +215,7 @@ export const listMyOpenTasks = async (userId: string): Promise<TaskWithOrganisat
     throw error
   }
 
-  type Row = TaskRow & { organisation: TaskWithOrganisation['organisation'] }
-  return ((data ?? []) as unknown as Row[]).map(toTask)
+  return data.map(toTask)
 }
 
 // ---------------------------------------------------------------------------
@@ -245,7 +250,7 @@ export const createLead = async (input: CreateLeadInput): Promise<Organisation> 
     throw error
   }
 
-  return data as Organisation
+  return requireRow(data)
 }
 
 export type ContactInput = Pick<Contact, 'name' | 'email' | 'phone' | 'title' | 'is_primary'>

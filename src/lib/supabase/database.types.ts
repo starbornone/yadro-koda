@@ -41,18 +41,21 @@ export type Database = {
           {
             foreignKeyName: 'activities_contact_id_fkey'
             columns: ['contact_id']
+            isOneToOne: false
             referencedRelation: 'contacts'
             referencedColumns: ['id']
           },
           {
             foreignKeyName: 'activities_created_by_fkey'
             columns: ['created_by']
+            isOneToOne: false
             referencedRelation: 'profiles'
             referencedColumns: ['id']
           },
           {
             foreignKeyName: 'activities_org_id_fkey'
             columns: ['org_id']
+            isOneToOne: false
             referencedRelation: 'organisations'
             referencedColumns: ['id']
           },
@@ -102,18 +105,21 @@ export type Database = {
           {
             foreignKeyName: 'contacts_created_by_fkey'
             columns: ['created_by']
+            isOneToOne: false
             referencedRelation: 'profiles'
             referencedColumns: ['id']
           },
           {
             foreignKeyName: 'contacts_org_id_fkey'
             columns: ['org_id']
+            isOneToOne: false
             referencedRelation: 'organisations'
             referencedColumns: ['id']
           },
           {
             foreignKeyName: 'contacts_user_id_fkey'
             columns: ['user_id']
+            isOneToOne: false
             referencedRelation: 'profiles'
             referencedColumns: ['id']
           },
@@ -148,12 +154,14 @@ export type Database = {
           {
             foreignKeyName: 'customers_org_id_fkey'
             columns: ['org_id']
+            isOneToOne: true
             referencedRelation: 'organisations'
             referencedColumns: ['id']
           },
           {
             foreignKeyName: 'customers_owner_id_fkey'
             columns: ['owner_id']
+            isOneToOne: false
             referencedRelation: 'platform_members'
             referencedColumns: ['user_id']
           },
@@ -206,18 +214,21 @@ export type Database = {
           {
             foreignKeyName: 'invitations_accepted_by_fkey'
             columns: ['accepted_by']
+            isOneToOne: false
             referencedRelation: 'profiles'
             referencedColumns: ['id']
           },
           {
             foreignKeyName: 'invitations_invited_by_fkey'
             columns: ['invited_by']
+            isOneToOne: false
             referencedRelation: 'profiles'
             referencedColumns: ['id']
           },
           {
             foreignKeyName: 'invitations_org_id_fkey'
             columns: ['org_id']
+            isOneToOne: false
             referencedRelation: 'organisations'
             referencedColumns: ['id']
           },
@@ -252,12 +263,14 @@ export type Database = {
           {
             foreignKeyName: 'memberships_org_id_fkey'
             columns: ['org_id']
+            isOneToOne: false
             referencedRelation: 'organisations'
             referencedColumns: ['id']
           },
           {
             foreignKeyName: 'memberships_user_id_fkey'
             columns: ['user_id']
+            isOneToOne: false
             referencedRelation: 'profiles'
             referencedColumns: ['id']
           },
@@ -292,6 +305,7 @@ export type Database = {
           {
             foreignKeyName: 'organisations_created_by_fkey'
             columns: ['created_by']
+            isOneToOne: false
             referencedRelation: 'profiles'
             referencedColumns: ['id']
           },
@@ -338,12 +352,14 @@ export type Database = {
           {
             foreignKeyName: 'platform_invitations_accepted_by_fkey'
             columns: ['accepted_by']
+            isOneToOne: false
             referencedRelation: 'profiles'
             referencedColumns: ['id']
           },
           {
             foreignKeyName: 'platform_invitations_invited_by_fkey'
             columns: ['invited_by']
+            isOneToOne: false
             referencedRelation: 'profiles'
             referencedColumns: ['id']
           },
@@ -372,6 +388,7 @@ export type Database = {
           {
             foreignKeyName: 'platform_members_user_id_fkey'
             columns: ['user_id']
+            isOneToOne: true
             referencedRelation: 'profiles'
             referencedColumns: ['id']
           },
@@ -418,6 +435,7 @@ export type Database = {
           {
             foreignKeyName: 'profiles_active_org_id_fkey'
             columns: ['active_org_id']
+            isOneToOne: false
             referencedRelation: 'organisations'
             referencedColumns: ['id']
           },
@@ -461,18 +479,21 @@ export type Database = {
           {
             foreignKeyName: 'tasks_assigned_to_fkey'
             columns: ['assigned_to']
+            isOneToOne: false
             referencedRelation: 'platform_members'
             referencedColumns: ['user_id']
           },
           {
             foreignKeyName: 'tasks_created_by_fkey'
             columns: ['created_by']
+            isOneToOne: false
             referencedRelation: 'profiles'
             referencedColumns: ['id']
           },
           {
             foreignKeyName: 'tasks_org_id_fkey'
             columns: ['org_id']
+            isOneToOne: false
             referencedRelation: 'organisations'
             referencedColumns: ['id']
           },

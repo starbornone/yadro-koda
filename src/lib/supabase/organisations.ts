@@ -1,3 +1,4 @@
+import { requireRow } from './require-row'
 import { supabase } from './supabase'
 
 export type OrgRole = 'owner' | 'admin' | 'member'
@@ -54,7 +55,7 @@ export const getMyMemberships = async (userId: string): Promise<Membership[]> =>
   }
 
   const now = Date.now()
-  return (data as unknown as Membership[]).filter(
+  return data.filter(
     (membership) => !membership.expires_at || Date.parse(membership.expires_at) > now,
   )
 }
@@ -75,7 +76,7 @@ export const createOrganisation = async (input: CreateOrganisationInput): Promis
     throw error
   }
 
-  return data as Organisation
+  return requireRow(data)
 }
 
 export type UpdateOrganisationInput = {
@@ -138,7 +139,7 @@ export const listMembers = async (orgId: string): Promise<OrganisationMember[]> 
     throw error
   }
 
-  return (data ?? []) as unknown as OrganisationMember[]
+  return data
 }
 
 export const updateMembershipRole = async (

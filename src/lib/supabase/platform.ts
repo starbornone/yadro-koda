@@ -58,7 +58,7 @@ export const getMyPlatformRole = async (userId: string): Promise<PlatformRole | 
     throw error
   }
 
-  return (data?.role as PlatformRole | undefined) ?? null
+  return data?.role ?? null
 }
 
 // ---------------------------------------------------------------------------
@@ -98,11 +98,7 @@ export const listOrganisations = async ({
     throw error
   }
 
-  type Row = Organisation & {
-    memberships: Array<{ count: number }>
-    customers: { stage: CustomerStage; owner: { profile: PublicProfile } | null }
-  }
-  return ((data ?? []) as unknown as Row[]).map(({ memberships, customers, ...organisation }) => ({
+  return data.map(({ memberships, customers, ...organisation }) => ({
     ...organisation,
     member_count: memberships[0]?.count ?? 0,
     stage: customers.stage,
@@ -121,7 +117,7 @@ export const getOrganisation = async (orgId: string): Promise<OrganisationDetail
     throw error
   }
 
-  return data as unknown as OrganisationDetail | null
+  return data
 }
 
 export const getPlatformOverview = async (): Promise<PlatformOverview> => {
@@ -158,7 +154,7 @@ export const listPlatformMembers = async (): Promise<PlatformMember[]> => {
     throw error
   }
 
-  return (data ?? []) as unknown as PlatformMember[]
+  return data
 }
 
 export const updatePlatformMemberRole = async (
@@ -199,7 +195,7 @@ export const listPlatformInvitations = async (): Promise<PlatformInvitation[]> =
     throw error
   }
 
-  return (data ?? []) as unknown as PlatformInvitation[]
+  return data
 }
 
 export type CreatePlatformInvitationInput = {
@@ -221,7 +217,7 @@ export const createPlatformInvitation = async (
     throw error
   }
 
-  return data as unknown as PlatformInvitation
+  return data
 }
 
 export const revokePlatformInvitation = async (invitationId: string): Promise<void> => {
