@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { AuthLayout } from '@/features/auth/components/auth-layout'
 import { useInvitePage } from '@/features/organisations/hooks/use-invite-page'
 import { ORG_ROLE_LABELS, PLATFORM_ROLE_LABELS } from '@/lib/auth/permissions'
+import { formatDateTime } from '@/lib/format'
 import type { InvitationPreview } from '@/lib/supabase/invitations'
 
 const Screen = ({
@@ -33,10 +34,20 @@ const HomeLink = () => (
 )
 
 /** What the link joins, and as what — worded to follow "invited you to join …". */
-const describe = (invitation: InvitationPreview) =>
-  invitation.kind === 'platform'
-    ? { target: 'the staff team', role: PLATFORM_ROLE_LABELS[invitation.role].toLowerCase() }
-    : { target: invitation.organisation_name, role: ORG_ROLE_LABELS[invitation.role].toLowerCase() }
+const describe = (invitation: InvitationPreview) => {
+  const until = invitation.access_expires_at
+    ? ` until ${formatDateTime(invitation.access_expires_at)}`
+    : ''
+  return invitation.kind === 'platform'
+    ? {
+        target: 'the staff team',
+        role: PLATFORM_ROLE_LABELS[invitation.role].toLowerCase() + until,
+      }
+    : {
+        target: invitation.organisation_name,
+        role: ORG_ROLE_LABELS[invitation.role].toLowerCase() + until,
+      }
+}
 
 /** Where an invitation link lands. One screen per state; `useInvitePage` picks which. */
 export const InvitePage = () => {

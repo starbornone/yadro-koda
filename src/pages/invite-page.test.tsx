@@ -35,6 +35,7 @@ const pending: InvitationPreview = {
   role: 'admin',
   invited_by_name: 'Ada',
   expires_at: '2999-01-01T00:00:00Z',
+  access_expires_at: null,
   accepted_at: null,
 }
 
@@ -45,6 +46,7 @@ const staffPending: InvitationPreview = {
   role: 'support',
   invited_by_name: 'Linus',
   expires_at: '2999-01-01T00:00:00Z',
+  access_expires_at: null,
   accepted_at: null,
 }
 
@@ -192,5 +194,12 @@ describe('InvitePage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Join the staff team' })).toBeInTheDocument()
     expect(screen.getByText(/invited you to join the staff team as support/)).toBeInTheDocument()
+  })
+
+  it('says when time-boxed access would end', async () => {
+    renderInvite({ ...pending, access_expires_at: '2026-12-31T23:59:59.999Z' }, grace)
+
+    await screen.findByRole('heading', { name: 'Join Acme?' })
+    expect(screen.getByText(/invited you to join as admin until /)).toBeInTheDocument()
   })
 })
