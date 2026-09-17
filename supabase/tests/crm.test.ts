@@ -65,6 +65,18 @@ describe('create_lead()', () => {
       expect(
         await sql(`select 1 from public.memberships where org_id = $1`, [org!.id]),
       ).toHaveLength(0)
+
+      // The "start as lead" hint must not leak into later work in the same transaction.
+      const [selfServe] = await as(f.rex, () =>
+        sql<{ id: string }>(
+          `select id from public.create_organisation('Globex', 'globex-db-test')`,
+        ),
+      )
+      const [trial] = await sql<{ stage: string }>(
+        `select stage from public.customers where org_id = $1`,
+        [selfServe!.id],
+      )
+      expect(trial?.stage).toBe('trial')
     })
   })
 })
@@ -107,6 +119,42 @@ describe('the pipeline', () => {
   })
 })
 
+describe('joins on the timeline', () => {
+  it('record every membership as the person who joined', async () => {
+    // Grace and Mia were added to Acme directly by the seed: no RPC, so no "how".
+    const rows = await sql<{ body: string; created_by: string }>(
+      `select body, created_by from public.activities where org_id = $1 and kind = 'joined' order by body`,
+      [f.acme],
+    )
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { body: 'Created the organisation', created_by: f.olive.id },
+        { body: 'Joined as admin', created_by: f.grace.id },
+        { body: 'Joined as member', created_by: f.mia.id },
+      ]),
+    )
+    expect(rows).toHaveLength(3)
+  })
+
+  it('are readable by staff and removable by managers, like any other entry', async () => {
+    const [entry] = await sql<{ id: string }>(
+      `select id from public.activities where org_id = $1 and kind = 'joined' and created_by = $2`,
+      [f.acme, f.mia.id],
+    )
+    expect(
+      await as(f.sue, () => sql(`select id from public.activities where id = $1`, [entry!.id])),
+    ).toHaveLength(1)
+    expect(
+      await as(f.sue, () => affected(`delete from public.activities where id = $1`, [entry!.id])),
+    ).toBe(0)
+    await scratch(async () => {
+      expect(
+        await as(f.pat, () => affected(`delete from public.activities where id = $1`, [entry!.id])),
+      ).toBe(1)
+    })
+  })
+})
+
 describe('contacts, activities and tasks', () => {
   it('are logged by any staff tier, as themselves', async () => {
     await scratch(async () => {
@@ -136,17 +184,19 @@ describe('contacts, activities and tasks', () => {
     })
   })
 
-  it('never let a client write a stage change or forge the author', async () => {
-    expect(
-      await failure(
-        as(f.sue, () =>
-          affected(
-            `insert into public.activities (org_id, kind, body) values ($1, 'stage_change', 'x')`,
-            [f.acme],
+  it('never let a client write a stage change or a join, or forge the author', async () => {
+    for (const kind of ['stage_change', 'joined']) {
+      expect(
+        await failure(
+          as(f.sue, () =>
+            affected(`insert into public.activities (org_id, kind, body) values ($1, $2, 'x')`, [
+              f.acme,
+              kind,
+            ]),
           ),
         ),
-      ),
-    ).toMatch(/row-level security/)
+      ).toMatch(/row-level security/)
+    }
     expect(
       await failure(
         as(f.sue, () =>

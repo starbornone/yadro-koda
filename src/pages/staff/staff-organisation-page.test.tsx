@@ -131,6 +131,16 @@ const activities: Activity[] = [
     created_by: 'user-1',
     author: { id: 'user-1', display_name: 'Ada', email: null },
   },
+  {
+    id: 'act-3',
+    org_id: 'org-1',
+    contact_id: 'contact-1',
+    kind: 'joined',
+    body: 'Accepted an invitation as admin',
+    occurred_at: '2026-01-10T10:00:00Z',
+    created_by: 'user-9',
+    author: { id: 'user-9', display_name: 'Grace Hopper', email: null },
+  },
 ]
 
 const tasks: Task[] = [
@@ -218,6 +228,10 @@ describe('StaffOrganisationPage', () => {
       /Linus · Call with Grace Hopper/,
     )
     expect(screen.getByText('Stage changed from trial to lead')).toBeInTheDocument()
+    // A join is attributed to the joiner and linked to their contact, without "with …".
+    const joined = screen.getByText('Accepted an invitation as admin').closest('li')!
+    expect(joined).toHaveTextContent(/Grace Hopper · Joined · /)
+    expect(joined).not.toHaveTextContent(/with Grace Hopper/)
     // Tasks: open ones listed and overdue flagged, completed ones folded away.
     expect(screen.getByText('Send proposal').closest('li')).toHaveTextContent(/Overdue/)
     expect(screen.getByRole('button', { name: 'Completed (1)' })).toBeInTheDocument()

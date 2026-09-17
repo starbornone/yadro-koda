@@ -148,11 +148,23 @@ describe('accept_invitation()', () => {
         [row!.id],
       )
       expect(invitation).toEqual({ accepted_by: f.rex.id, accepted: true })
-      const [contact] = await sql<{ user_id: string }>(
-        `select user_id from public.contacts where org_id = $1 and email ilike 'rex@db.test'`,
+      const [contact] = await sql<{ id: string; user_id: string }>(
+        `select id, user_id from public.contacts where org_id = $1 and email ilike 'rex@db.test'`,
         [f.acme],
       )
       expect(contact?.user_id).toBe(f.rex.id)
+
+      // …and the timeline says so, as Rex, against the contact staff already had for him.
+      const [joined] = await sql<{ body: string; created_by: string; contact_id: string }>(
+        `select body, created_by, contact_id from public.activities
+         where org_id = $1 and kind = 'joined' and created_by = $2`,
+        [f.acme, f.rex.id],
+      )
+      expect(joined).toEqual({
+        body: 'Accepted an invitation as member',
+        created_by: f.rex.id,
+        contact_id: contact!.id,
+      })
 
       expect(await failure(accept(f.rex, row!.token))).toMatch(/already been used/)
     })

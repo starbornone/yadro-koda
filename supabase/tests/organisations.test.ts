@@ -39,6 +39,12 @@ describe('create_organisation()', () => {
       [f.acme],
     )
     expect(customer?.stage).toBe('trial')
+
+    const [founding] = await sql<{ body: string; created_by: string }>(
+      `select body, created_by from public.activities where org_id = $1 and kind = 'joined' and created_by = $2`,
+      [f.acme, f.olive.id],
+    )
+    expect(founding).toEqual({ body: 'Created the organisation', created_by: f.olive.id })
   })
 
   it('refuses a taken slug and a signed-out caller', async () => {
