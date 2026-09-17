@@ -508,6 +508,7 @@ export type Database = {
       }
       accept_platform_invitation: { Args: { token: string }; Returns: undefined }
       auth_providers_array: { Args: { app_metadata: Json }; Returns: string[] }
+      backfill_profiles: { Args: Record<PropertyKey, never>; Returns: number }
       can_manage_org_member: {
         Args: { target_org: string; target_role: Database['public']['Enums']['org_role'] }
         Returns: boolean
