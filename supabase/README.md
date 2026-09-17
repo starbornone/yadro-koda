@@ -44,14 +44,20 @@ supabase db push
 ```
 
 From that point on, schema changes are migrations; `schemas/` becomes documentation of the
-baseline (or delete it — the migration history is the truth). Then generate types so queries are
-checked end-to-end:
+baseline (or delete it — the migration history is the truth).
+
+## Generated types
+
+`src/lib/supabase/database.types.ts` is generated from the database and passed to
+`createClient<Database>`, so every table, column, enum and RPC signature the app uses is
+checked at compile time. Regenerate it after any schema change:
 
 ```bash
-supabase gen types typescript --linked > src/lib/supabase/database.types.ts
+pnpm db:types   # needs DATABASE_URL in .env.local (Connect → Session pooler); then pnpm format
 ```
 
-and pass the `Database` type to `createClient`.
+This runs the same generator as `supabase gen types typescript`, minus the Docker or access
+token that command needs. The generated file is committed so CI and editors see the types.
 
 ## Auth settings (dashboard)
 
