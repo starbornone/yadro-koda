@@ -74,8 +74,8 @@ src/
     supabase/           # Supabase client; profile, organisation, invitation, platform, CRM queries
   features/
     auth/               # Auth layout, login / sign-up / reset forms and hooks
-    organisations/      # Create-organisation form, members section, and the settings /
-                        # members / invite page hooks
+    organisations/      # Create-organisation form, members and delete-organisation sections,
+                        # and the settings / members / invite page hooks
     staff/              # Staff team and organisation page hooks
     crm/                # Customer record sections (pipeline, contacts, activity, tasks), stages
     accounts/           # Account chooser hook
@@ -112,7 +112,7 @@ Path alias: `@/` → `src/`.
 | `/accounts`              | signed in            | Choose where to go: staff area or an organisation              |
 | `/onboarding`            | signed in, no org    | Create your first organisation                                 |
 | `/app`                   | signed in + member   | Dashboard, inside the active organisation                      |
-| `/app/settings`          | signed in + member   | Organisation settings (owners/admins can edit)                 |
+| `/app/settings`          | signed in + member   | Organisation settings (owners/admins edit; owners delete)      |
 | `/app/members`           | signed in + member   | Who belongs; owners/admins invite, change roles, remove; leave |
 | `/app/organisations/new` | signed in + member   | Create another organisation                                    |
 | `/app/profile`           | signed in + member   | Profile, password, account, sign-out                           |
@@ -177,6 +177,10 @@ and `platformRole` once. Non-staff who open `/staff` are sent to `/app`.
   own row is deletable), except the last owner — the page says so before they try. A trigger
   clears `profiles.active_org_id` for whoever leaves or is removed, so the app falls back to
   another of their organisations, or to onboarding.
+- **Deleting an organisation** (`/app/settings`, owners only; superadmins from the customer
+  record) takes memberships, invitations and the CRM record with it by cascade. The dialog
+  asks for the URL name to be typed back. `protect_last_owner()` stands aside for the cascade,
+  and `profiles.active_org_id` is cleared by its foreign key.
 - The `_authenticated` route loads `profile`, `memberships` and `platformRole` once. The `_app`
   layout beneath it reads them through `parentMatchPromise`, redirects when there are no
   memberships, and resolves the active organisation (`profiles.active_org_id`, else the first
