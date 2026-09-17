@@ -478,8 +478,12 @@ begin
   values (btrim(name), slug, caller)
   returning * into org;
 
+  -- Read by log_join() (30_crm.sql) when the membership trigger fires below. Cleared after:
+  -- the setting lives for the transaction, which may outlast this call.
+  perform set_config('app.joined_via', 'created', true);
   insert into public.memberships (org_id, user_id, role)
   values (org.id, caller, 'owner');
+  perform set_config('app.joined_via', '', true);
 
   update public.profiles set active_org_id = org.id where id = caller;
 

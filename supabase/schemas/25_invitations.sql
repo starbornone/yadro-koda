@@ -237,9 +237,13 @@ begin
       using errcode = 'insufficient_privilege';
   end if;
 
+  -- Read by log_join() (30_crm.sql) when the membership trigger fires below. Cleared after:
+  -- the setting lives for the transaction, which may outlast this call.
+  perform set_config('app.joined_via', 'invitation', true);
   insert into public.memberships (org_id, user_id, role, expires_at)
   values (invitation.org_id, caller, invitation.role, invitation.access_expires_at)
   on conflict (org_id, user_id) do update set expires_at = excluded.expires_at;
+  perform set_config('app.joined_via', '', true);
 
   update public.invitations
   set accepted_at = now(), accepted_by = caller

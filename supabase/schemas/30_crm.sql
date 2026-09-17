@@ -9,7 +9,8 @@
 --               source. Every stage change is logged to the timeline automatically.
 --   contacts    people at the customer — not necessarily users. `user_id` links a contact to
 --               the account they sign in with once they have one.
---   activities  the timeline: notes, calls, emails, meetings, stage changes.
+--   activities  the timeline: notes, calls, emails, meetings, and what the database records
+--               by itself — stage changes, and people joining.
 --   tasks       follow-ups for staff, assigned to a staff member, with a due date.
 --
 -- Access: every staff tier reads all of it and logs activity (contacts, notes, tasks). Moving
@@ -21,7 +22,9 @@
 create type public.customer_stage as enum (
   'lead', 'qualified', 'trial', 'active', 'churned', 'lost'
 );
-create type public.activity_kind as enum ('note', 'call', 'email', 'meeting', 'stage_change');
+create type public.activity_kind as enum (
+  'note', 'call', 'email', 'meeting', 'stage_change', 'joined'
+);
 
 -- ---------------------------------------------------------------------------
 -- Tables
@@ -79,7 +82,8 @@ create table public.activities (
   updated_at timestamptz not null default now()
 );
 
-comment on table public.activities is 'The customer timeline. Stage changes are logged here by trigger.';
+comment on table public.activities is
+  'The customer timeline. Stage changes and joins are logged here by trigger.';
 
 create index activities_org_id_occurred_at_idx on public.activities (org_id, occurred_at desc);
 
@@ -227,6 +231,42 @@ create trigger memberships_link_contact
   after insert on public.memberships
   for each row execute function public.link_contact_to_member();
 
+-- Someone joining is the moment a lead becomes a tenant, and worth a line on the timeline —
+-- written as the person who joined. The RPCs say how they came in through the transaction-local
+-- `app.joined_via` hint ('created' from create_organisation(), 'invitation' from
+-- accept_invitation()). Linked to the contact staff held for them, when there is one:
+-- memberships_link_contact runs first (triggers fire in name order).
+create or replace function public.log_join()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into public.activities (org_id, contact_id, kind, body, created_by)
+  values (
+    new.org_id,
+    (
+      select c.id from public.contacts c
+      where c.org_id = new.org_id and c.user_id = new.user_id
+      limit 1
+    ),
+    'joined',
+    case current_setting('app.joined_via', true)
+      when 'created' then 'Created the organisation'
+      when 'invitation' then format('Accepted an invitation as %s', new.role)
+      else format('Joined as %s', new.role)
+    end,
+    new.user_id
+  );
+  return new;
+end;
+$$;
+
+create trigger memberships_log_join
+  after insert on public.memberships
+  for each row execute function public.log_join();
+
 -- ---------------------------------------------------------------------------
 -- Row-level security
 -- ---------------------------------------------------------------------------
@@ -288,7 +328,7 @@ create policy "contacts_delete_creator_or_manager"
   using (created_by = (select auth.uid()) or public.platform_can_manage_customers());
 
 -- activities: anyone on staff logs; only the author edits; author or manager removes.
--- Stage changes are written by trigger only.
+-- Stage changes and joins are written by trigger only.
 revoke insert, update on table public.activities from authenticated;
 grant insert (org_id, contact_id, kind, body, occurred_at) on table public.activities to authenticated;
 grant update (contact_id, kind, body, occurred_at) on table public.activities to authenticated;
@@ -306,7 +346,7 @@ create policy "activities_insert_staff"
   with check (
     public.is_platform_member()
     and created_by = (select auth.uid())
-    and kind <> 'stage_change'
+    and kind not in ('stage_change', 'joined')
   );
 
 create policy "activities_update_author"
@@ -314,7 +354,7 @@ create policy "activities_update_author"
   for update
   to authenticated
   using (created_by = (select auth.uid()))
-  with check (created_by = (select auth.uid()) and kind <> 'stage_change');
+  with check (created_by = (select auth.uid()) and kind not in ('stage_change', 'joined'));
 
 create policy "activities_delete_author_or_manager"
   on public.activities
@@ -384,12 +424,13 @@ begin
     raise exception 'only platform admins can create leads' using errcode = 'insufficient_privilege';
   end if;
 
-  -- Read by create_customer_for_organisation() when the trigger fires below.
+  -- Read by create_customer_for_organisation() when the trigger fires below. Cleared after:
+  -- the setting lives for the transaction, which may outlast this call.
   perform set_config('app.customer_stage', 'lead', true);
-
   insert into public.organisations (name, slug, created_by)
   values (btrim(name), slug, caller)
   returning * into org;
+  perform set_config('app.customer_stage', '', true);
 
   update public.customers
   set owner_id = caller, source = nullif(btrim(create_lead.source), '')
