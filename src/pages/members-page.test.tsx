@@ -1,6 +1,7 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { endOfDay } from '@/lib/format'
 import type { Invitation } from '@/lib/supabase/invitations'
 import type { OrgRole, OrganisationMember } from '@/lib/supabase/organisations'
 import { renderAuthenticated } from '@/test/render-authenticated'
@@ -10,6 +11,7 @@ vi.mock('@/lib/supabase/supabase', () => ({ supabase: {} }))
 
 const organisations = vi.hoisted(() => ({
   updateMembershipRole: vi.fn(),
+  updateMembershipExpiry: vi.fn(),
   removeMember: vi.fn(),
 }))
 vi.mock('@/lib/supabase/organisations', async (importOriginal) => ({
@@ -62,6 +64,7 @@ const invitations: Invitation[] = [
     token: TOKEN,
     invited_by: 'user-1',
     expires_at: '2999-01-01T00:00:00Z',
+    access_expires_at: null,
     accepted_at: null,
     created_at: '2026-09-01T00:00:00Z',
   },
@@ -73,6 +76,7 @@ const invitations: Invitation[] = [
     token: '11111111-2222-4333-8444-555555555555',
     invited_by: 'user-1',
     expires_at: '2020-01-01T00:00:00Z',
+    access_expires_at: null,
     accepted_at: null,
     created_at: '2019-12-25T00:00:00Z',
   },
@@ -200,6 +204,7 @@ describe('MembersPage', () => {
     expect(invitationsApi.createInvitation).toHaveBeenCalledWith('org-1', {
       email: 'New@Example.com',
       role: 'member',
+      access_expires_at: null,
     })
     expect(await screen.findByLabelText('Invitation link for new@example.com')).toHaveValue(
       `${window.location.origin}/invite/22222222-3333-4444-8555-666666666666`,
@@ -282,5 +287,71 @@ describe('MembersPage', () => {
     expect(await screen.findByText('cannot remove the last owner')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Leave organisation' })).toBeEnabled()
     expect(router.state.location.pathname).toBe('/app/members')
+  })
+
+  it('sets and clears a member’s access end, through the end of the chosen day', async () => {
+    const user = userEvent.setup()
+    const { router } = renderPage('owner')
+    const invalidate = vi.spyOn(router, 'invalidate')
+
+    // Linus has no end date; give him one.
+    await user.click(await screen.findByRole('button', { name: 'Change access for Linus' }))
+    const date = screen.getByLabelText('Access ends for Linus')
+    expect(date).toHaveValue('')
+    await user.type(date, '2999-12-31')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(organisations.updateMembershipExpiry).toHaveBeenCalledWith(
+      'org-1',
+      'user-0',
+      endOfDay('2999-12-31'),
+    )
+    await waitFor(() => expect(invalidate).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(screen.queryByLabelText('Access ends for Linus')).not.toBeInTheDocument(),
+    )
+
+    // Grace has one; the editor opens on it, and emptying it means "never".
+    await user.click(screen.getByRole('button', { name: 'Change access for grace@example.com' }))
+    const graceDate = screen.getByLabelText('Access ends for grace@example.com')
+    expect(graceDate).toHaveValue('2026-12-31')
+    await user.clear(graceDate)
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(organisations.updateMembershipExpiry).toHaveBeenLastCalledWith('org-1', 'user-2', null)
+  })
+
+  it('never offers access changes to members, or on the viewer’s own row', async () => {
+    renderPage('member')
+    await screen.findByText('Linus')
+    expect(screen.queryByRole('button', { name: /Change access/ })).not.toBeInTheDocument()
+
+    cleanup()
+    renderPage('owner')
+    await screen.findByText('Linus')
+    expect(screen.queryByRole('button', { name: 'Change access for Ada' })).not.toBeInTheDocument()
+  })
+
+  it('invites with an access end and lists it', async () => {
+    invitationsApi.createInvitation.mockResolvedValue({
+      ...invitations[0],
+      id: 'inv-3',
+      email: 'temp@example.com',
+      access_expires_at: endOfDay('2999-06-30'),
+    })
+    const user = userEvent.setup()
+    renderPage('owner')
+
+    const section = within(await screen.findByRole('region', { name: 'Invitations' }))
+    expect(section.getByText('katherine@example.com').closest('tr')).toHaveTextContent('Never')
+
+    await user.type(section.getByLabelText('Email'), 'temp@example.com')
+    await user.type(section.getByLabelText('Access ends'), '2999-06-30')
+    await user.click(section.getByRole('button', { name: 'Create invitation' }))
+
+    expect(invitationsApi.createInvitation).toHaveBeenCalledWith('org-1', {
+      email: 'temp@example.com',
+      role: 'member',
+      access_expires_at: endOfDay('2999-06-30'),
+    })
+    await waitFor(() => expect(section.getByLabelText('Access ends')).toHaveValue(''))
   })
 })
