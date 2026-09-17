@@ -58,7 +58,10 @@ baseline (or delete it — the migration history is the truth).
 
 `src/lib/supabase/database.types.ts` is generated from the database and passed to
 `createClient<Database>`, so every table, column, enum and RPC signature the app uses is
-checked at compile time. Regenerate it after any schema change:
+checked at compile time — embedded selects included, which is why the data layer's select
+strings are literal types (`as const`) and its results are returned without casts. A misspelt
+column in `profile:profiles(id, display_name)` is a `tsc` error. Regenerate after any schema
+change:
 
 ```bash
 pnpm db:types   # needs DATABASE_URL in .env.local (Connect → Session pooler); then pnpm format
@@ -67,14 +70,22 @@ pnpm db:types   # needs DATABASE_URL in .env.local (Connect → Session pooler);
 This runs the same generator as `supabase gen types typescript`, minus the Docker or access
 token that command needs. The generated file is committed so CI and editors see the types.
 
-## Auth settings (dashboard)
+## Auth settings
 
-The password-reset flow needs one thing that lives outside the schema:
+The password-reset flow needs one thing that lives outside the schema: the auth redirect
+allow-list. The app passes `<origin>/reset-password` as `redirectTo` when requesting a reset;
+Supabase refuses targets that are not on the list and falls back to the Site URL. (The app still
+recovers — a recovery session landing on `/` is redirected to `/reset-password` — but the
+allow-list is the correct fix.)
 
-- **Authentication → URL Configuration → Redirect URLs** must include the reset page for every
-  environment, e.g. `http://localhost:5173/reset-password` and
-  `https://<your-domain>/reset-password`. The app passes this as `redirectTo` when requesting a
-  reset; Supabase refuses redirect targets that are not on the list and falls back to the Site
-  URL. (The app still recovers — a recovery session landing on `/` is redirected to
-  `/reset-password` — but the allow-list is the correct fix.)
-- The default **Reset Password** email template (`{{ .ConfirmationURL }}`) works as-is.
+It is declared in `config.toml` under `[auth]` — `site_url` and `additional_redirect_urls`,
+with `http://localhost:5173/**` for the dev server — and applied to the hosted project with the
+CLI (needs `supabase login` and a linked project):
+
+```bash
+supabase config push
+```
+
+Or set the same two values by hand under **Authentication → URL Configuration**, adding each
+deployed origin as `https://<your-domain>/**`. The default **Reset Password** email template
+(`{{ .ConfirmationURL }}`) works as-is.

@@ -37,6 +37,9 @@ try {
   // Prettier formats the result via `pnpm format`; skip the generator's own formatter.
   const code = await generateTypescript(metadata, {
     defaultSchema: 'public',
+    // PostgREST embeds a row whose foreign key is also unique (customers.org_id) as an object,
+    // not an array; mark those relationships so the inferred types match what arrives.
+    detectOneToOneRelationships: true,
     format: async (source) => source,
   })
   writeFileSync(out, code)
