@@ -37,6 +37,7 @@ const invitation = {
   token: TOKEN,
   invited_by: 'user-1',
   expires_at: '2999-01-01T00:00:00Z',
+  access_expires_at: null,
   accepted_at: null,
   created_at: '2026-09-01T00:00:00Z',
 }
@@ -105,8 +106,22 @@ describe('createInvitation', () => {
       org_id: 'org-1',
       email: 'grace@acme.test',
       role: 'member',
+      access_expires_at: null,
     })
     expect(query.builder.select).toHaveBeenCalledWith(expect.stringContaining('token'))
+  })
+
+  it('passes a time-boxed access end through', async () => {
+    query.builder.single.mockResolvedValue({ data: invitation, error: null })
+
+    await createInvitation('org-1', {
+      email: 'grace@acme.test',
+      role: 'member',
+      access_expires_at: '2026-12-31T23:59:59.999Z',
+    })
+    expect(query.builder.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ access_expires_at: '2026-12-31T23:59:59.999Z' }),
+    )
   })
 
   it('throws the Supabase error, such as a duplicate pending invitation', async () => {

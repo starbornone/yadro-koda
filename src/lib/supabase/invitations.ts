@@ -21,7 +21,10 @@ export type Invitation = {
   /** The link secret. Only readable by people who may send the link. */
   token: string
   invited_by: string | null
+  /** When the link stops working. */
   expires_at: string
+  /** When the membership it creates stops working; null for no expiry. */
+  access_expires_at: string | null
   accepted_at: string | null
   created_at: string
 }
@@ -30,6 +33,8 @@ type InvitationPreviewBase = {
   email: string
   invited_by_name: string | null
   expires_at: string
+  /** Organisation invitations only: when the access being offered ends. */
+  access_expires_at: string | null
   accepted_at: string | null
 }
 
@@ -55,7 +60,7 @@ export const invitationLink = (token: string, origin = window.location.origin) =
   `${origin}/invite/${token}`
 
 const INVITATION_SELECT =
-  'id, org_id, email, role, token, invited_by, expires_at, accepted_at, created_at'
+  'id, org_id, email, role, token, invited_by, expires_at, access_expires_at, accepted_at, created_at'
 
 // Tokens are uuids; anything else cannot be an invitation, so skip the round trip (and the
 // database's "invalid input syntax" error) for a mistyped link.
@@ -80,6 +85,8 @@ export const listInvitations = async (orgId: string): Promise<Invitation[]> => {
 export type CreateInvitationInput = {
   email: string
   role: OrgRole
+  /** Time-boxed access: when the membership should end. Omit or null for no expiry. */
+  access_expires_at?: string | null
 }
 
 /** Invites an email address to the organisation. Returns the row, token included, for the link. */
@@ -89,7 +96,12 @@ export const createInvitation = async (
 ): Promise<Invitation> => {
   const { data, error } = await supabase
     .from('invitations')
-    .insert({ org_id: orgId, email: input.email.trim().toLowerCase(), role: input.role })
+    .insert({
+      org_id: orgId,
+      email: input.email.trim().toLowerCase(),
+      role: input.role,
+      access_expires_at: input.access_expires_at ?? null,
+    })
     .select(INVITATION_SELECT)
     .single()
 
