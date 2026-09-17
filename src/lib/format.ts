@@ -24,9 +24,24 @@ export const formatDay = (day: string | null | undefined) => {
   return dateFormat.format(new Date(year, month - 1, date))
 }
 
-/** Today as `YYYY-MM-DD` in the viewer's time zone, for comparing with calendar dates. */
-export const today = () => {
-  const now = new Date()
+/** An instant as `YYYY-MM-DD` in the viewer's time zone — what a date input wants. */
+export const dayOf = (iso: string | Date) => {
+  const date = typeof iso === 'string' ? new Date(iso) : iso
   const pad = (n: number) => String(n).padStart(2, '0')
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+/** Today as `YYYY-MM-DD` in the viewer's time zone, for comparing with calendar dates. */
+export const today = () => dayOf(new Date())
+
+/**
+ * The last instant of a calendar date (`YYYY-MM-DD`) in the viewer's time zone, as an ISO
+ * timestamp — "access ends on the 15th" means through the end of the 15th. Null when the
+ * input is not a date.
+ */
+export const endOfDay = (day: string): string | null => {
+  const [year, month, date] = day.split('-').map(Number)
+  if (!year || !month || !date) return null
+  const instant = new Date(year, month - 1, date, 23, 59, 59, 999)
+  return Number.isNaN(instant.getTime()) ? null : instant.toISOString()
 }
