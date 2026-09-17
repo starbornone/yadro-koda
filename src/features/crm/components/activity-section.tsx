@@ -7,6 +7,7 @@ import {
   MessageSquareTextIcon,
   PhoneIcon,
   Trash2Icon,
+  UserPlusIcon,
   UsersRoundIcon,
 } from 'lucide-react'
 import { ConfirmButton } from '@/components/confirm-button'
@@ -44,9 +45,10 @@ const KIND_ICONS: Record<Activity['kind'], typeof MailIcon> = {
   email: MailIcon,
   meeting: UsersRoundIcon,
   stage_change: ArrowRightLeftIcon,
+  joined: UserPlusIcon,
 }
 
-/** The customer timeline: what staff logged, plus stage changes the database recorded. */
+/** The customer timeline: what staff logged, plus what the database recorded — stage changes and joins. */
 export const ActivitySection = ({
   orgId,
   activities,
@@ -147,7 +149,9 @@ export const ActivitySection = ({
         <ol className="flex flex-col divide-y rounded-xl border">
           {activities.map((activity) => {
             const Icon = KIND_ICONS[activity.kind]
-            const withContact = contactName(activity.contact_id)
+            // A join is linked to the joiner's own contact; "Joined with Rex" would misread.
+            const withContact =
+              activity.kind === 'joined' ? undefined : contactName(activity.contact_id)
             const canRemove = canManage || activity.created_by === currentUserId
             return (
               <li key={activity.id} className="flex gap-3 p-4">

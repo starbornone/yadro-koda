@@ -223,7 +223,9 @@ staff know about it lives in tables tenants cannot read (`supabase/schemas/30_cr
 - `contacts` — people at the customer, whether or not they have a sign-in; one primary per
   organisation. `user_id` links a contact to their account: set by trigger when someone joins
   the organisation with the same email (typically by accepting an invitation), never by hand.
-- `activities` — the timeline: notes, calls, emails, meetings, stage changes.
+- `activities` — the timeline: notes, calls, emails, meetings, and what the database records by
+  itself: stage changes, and people joining ("Created the organisation", "Accepted an
+  invitation as admin") — the moment a lead becomes a tenant, in the record.
 - `tasks` — follow-ups with a due date and a staff assignee; the overview lists yours.
 
 Every staff tier reads all of it and logs activity; moving the pipeline (stage, owner, source,

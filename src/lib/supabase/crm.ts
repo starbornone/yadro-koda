@@ -24,8 +24,11 @@ export type CustomerStage = (typeof CUSTOMER_STAGES)[number]
 export const isCustomerStage = (value: unknown): value is CustomerStage =>
   typeof value === 'string' && (CUSTOMER_STAGES as readonly string[]).includes(value)
 
-/** Mirrors the `activity_kind` enum. `stage_change` rows are written by the database. */
-export type ActivityKind = 'note' | 'call' | 'email' | 'meeting' | 'stage_change'
+/** Mirrors the `activity_kind` enum. `stage_change` and `joined` rows are written by the database. */
+export type ActivityKind = 'note' | 'call' | 'email' | 'meeting' | 'stage_change' | 'joined'
+
+/** What the database records on its own; clients cannot log these. */
+export type SystemActivityKind = 'stage_change' | 'joined'
 
 export type Customer = {
   org_id: string
@@ -290,7 +293,7 @@ export const removeContact = async (contactId: string): Promise<void> => {
 }
 
 export type ActivityInput = {
-  kind: Exclude<ActivityKind, 'stage_change'>
+  kind: Exclude<ActivityKind, SystemActivityKind>
   body: string
   contact_id?: string | null
   occurred_at?: string

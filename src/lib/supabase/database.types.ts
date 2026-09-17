@@ -603,7 +603,7 @@ export type Database = {
       shares_org_with: { Args: { target_user: string }; Returns: boolean }
     }
     Enums: {
-      activity_kind: 'note' | 'call' | 'email' | 'meeting' | 'stage_change'
+      activity_kind: 'note' | 'call' | 'email' | 'meeting' | 'stage_change' | 'joined'
       customer_stage: 'lead' | 'qualified' | 'trial' | 'active' | 'churned' | 'lost'
       org_role: 'owner' | 'admin' | 'member'
       platform_role: 'superadmin' | 'admin' | 'support'
@@ -722,7 +722,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      activity_kind: ['note', 'call', 'email', 'meeting', 'stage_change'],
+      activity_kind: ['note', 'call', 'email', 'meeting', 'stage_change', 'joined'],
       customer_stage: ['lead', 'qualified', 'trial', 'active', 'churned', 'lost'],
       org_role: ['owner', 'admin', 'member'],
       platform_role: ['superadmin', 'admin', 'support'],
