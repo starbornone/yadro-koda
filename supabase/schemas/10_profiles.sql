@@ -2,6 +2,7 @@
 --
 -- Ownership model
 --   * Rows are created by a trigger on auth.users insert and removed by ON DELETE CASCADE.
+--     Users from before the trigger existed are caught up by backfill_profiles() (bottom).
 --   * email / phone / provider / providers / last_sign_in_at mirror auth.users and are kept in
 --     sync by a trigger on auth.users update. Clients cannot write them.
 --   * display_name is seeded from sign-up metadata, then owned by the profile.
@@ -121,3 +122,42 @@ create trigger on_auth_user_updated
 create trigger profiles_set_updated_at
   before update on public.profiles
   for each row execute function public.set_updated_at();
+
+-- ---------------------------------------------------------------------------
+-- Backfill: users who existed before the trigger did. A project that adds this schema to a
+-- live auth.users has sign-ins with no profile row, and nothing that reads profiles (the app's
+-- loader, accept_invitation()'s email check) works for them. Idempotent — existing rows are
+-- left alone — and callable again by an operator; clients cannot run it.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.backfill_profiles()
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  inserted integer;
+begin
+  insert into public.profiles (
+    id, display_name, email, phone, provider, providers, created_at, last_sign_in_at
+  )
+  select
+    u.id,
+    nullif(btrim(u.raw_user_meta_data ->> 'display_name'), ''),
+    u.email,
+    u.phone,
+    u.raw_app_meta_data ->> 'provider',
+    public.auth_providers_array(u.raw_app_meta_data),
+    u.created_at,
+    u.last_sign_in_at
+  from auth.users u
+  on conflict (id) do nothing;
+  get diagnostics inserted = row_count;
+  return inserted;
+end;
+$$;
+
+revoke all on function public.backfill_profiles() from public, anon, authenticated;
+
+select public.backfill_profiles();

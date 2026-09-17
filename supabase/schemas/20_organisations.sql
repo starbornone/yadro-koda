@@ -487,5 +487,8 @@ begin
 end;
 $$;
 
-revoke all on function public.create_organisation(text, text) from public;
+-- Supabase grants execute on every new function to anon and authenticated by default (not
+-- just to public), so both are revoked before granting back exactly who may call. Every RPC
+-- below follows this pattern.
+revoke all on function public.create_organisation(text, text) from public, anon, authenticated;
 grant execute on function public.create_organisation(text, text) to authenticated;

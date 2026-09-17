@@ -399,5 +399,5 @@ begin
 end;
 $$;
 
-revoke all on function public.create_lead(text, text, text) from public;
+revoke all on function public.create_lead(text, text, text) from public, anon, authenticated;
 grant execute on function public.create_lead(text, text, text) to authenticated;

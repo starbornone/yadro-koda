@@ -189,7 +189,7 @@ as $$
   where i.token = get_invitation.token;
 $$;
 
-revoke all on function public.get_invitation(uuid) from public;
+revoke all on function public.get_invitation(uuid) from public, anon, authenticated;
 grant execute on function public.get_invitation(uuid) to anon, authenticated;
 
 -- ---------------------------------------------------------------------------
@@ -252,7 +252,7 @@ begin
 end;
 $$;
 
-revoke all on function public.accept_invitation(uuid) from public;
+revoke all on function public.accept_invitation(uuid) from public, anon, authenticated;
 grant execute on function public.accept_invitation(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
@@ -307,5 +307,5 @@ begin
 end;
 $$;
 
-revoke all on function public.accept_platform_invitation(uuid) from public;
+revoke all on function public.accept_platform_invitation(uuid) from public, anon, authenticated;
 grant execute on function public.accept_platform_invitation(uuid) to authenticated;
