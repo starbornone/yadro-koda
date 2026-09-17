@@ -173,8 +173,9 @@ and `platformRole` once. Non-staff who open `/staff` are sent to `/app`.
 - **Managing members** (`/app/members`) follows the same tier rule in SQL
   (`can_manage_org_member()`): owners change or remove anyone, admins anyone below owner. The
   UI never offers it on your own row, and the database refuses to remove or demote the last
-  owner. Roles are the only membership column clients may write. Anyone may **leave** (their
-  own row is deletable), except the last owner — the page says so before they try. A trigger
+  owner. Roles and `expires_at` are the only membership columns clients may write. Anyone may
+  **leave** (their own row is deletable), except the last owner — the page says so before they
+  try. A trigger
   clears `profiles.active_org_id` for whoever leaves or is removed, so the app falls back to
   another of their organisations, or to onboarding.
 - **Deleting an organisation** (`/app/settings`, owners only; superadmins from the customer
@@ -196,8 +197,13 @@ and `platformRole` once. Non-staff who open `/staff` are sent to `/app`.
 - `canInOrg(role, action)` and `canOnPlatform(role, action)` in `src/lib/auth/permissions.ts`
   decide what the UI shows; RLS decides what the database allows. Both must agree; the database
   wins.
-- `memberships.expires_at` supports time-boxed access (e.g. an external reviewer) — RLS ignores
-  expired memberships.
+- **Time-boxed access.** `memberships.expires_at` (e.g. for an external reviewer) is set by
+  whoever may manage the member: on the invitation (`invitations.access_expires_at`, copied
+  onto the membership by `accept_invitation()`), or edited on the member row afterwards. The UI
+  takes a calendar date and stores the end of that day in the viewer's time zone (`endOfDay`).
+  RLS ignores expired memberships, and `protect_last_owner()` counts only owners whose access
+  is current — so the last owner cannot be expired, though a future date is allowed. Staff
+  access is not time-boxed.
 
 ## CRM
 
