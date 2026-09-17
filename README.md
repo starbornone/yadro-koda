@@ -55,6 +55,7 @@ fields they own.
 | `pnpm test:watch`   | Vitest in watch mode                                                 |
 | `pnpm db:check`     | Parse the SQL schema (no database needed)                            |
 | `pnpm db:types`     | Regenerate `database.types.ts` from a live database (`DATABASE_URL`) |
+| `pnpm db:test`      | Run the schema tests against a live database (`DATABASE_URL`)        |
 
 ## Project layout
 
@@ -274,8 +275,15 @@ is where guard and redirect behaviour is pinned down. Pages that live under the 
 tested with `renderAuthenticated()` from `src/test/render-authenticated.tsx`, which supplies the
 `_authenticated` route context and loader data without the real guards.
 
+**Schema tests** (`supabase/tests/`, `pnpm db:test`) are the other suite: they run the real
+policies, triggers and RPCs against a live database, impersonating users the way PostgREST does
+(`set role authenticated` + `request.jwt.claims`). Each file opens one transaction, seeds its
+own users and organisation, and rolls everything back at the end, so they are safe to run
+against a project with data in it. They need `DATABASE_URL` in `.env.local`.
+
 CI (`.github/workflows/ci.yml`) runs format, lint, typecheck, schema check, test and build on
-every push to `main` and every pull request.
+every push to `main` and every pull request. A second job runs `pnpm db:test` when the
+repository has a `DATABASE_URL` secret and a `HAS_DATABASE_URL=true` variable.
 
 ## Conventions
 

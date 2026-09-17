@@ -29,6 +29,13 @@ Check syntax without a database:
 pnpm db:check
 ```
 
+Check behaviour with one — every policy, trigger and RPC, as each kind of user, rolled back
+afterwards (`tests/`; needs `DATABASE_URL`):
+
+```bash
+pnpm db:test
+```
+
 ## When a database exists
 
 Create the Supabase project in the region your data must live in — it cannot be moved later.

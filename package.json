@@ -19,7 +19,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:check": "node scripts/check-schema.mjs",
-    "db:types": "node scripts/gen-types.mjs"
+    "db:types": "node scripts/gen-types.mjs",
+    "db:test": "vitest run --config vitest.db.config.ts"
   },
   "dependencies": {
     "@fontsource-variable/noto-sans": "^5.2.10",
@@ -44,6 +45,7 @@
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
     "@types/node": "^24.12.2",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
