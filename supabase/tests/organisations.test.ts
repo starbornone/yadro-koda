@@ -1,5 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { affected, as, connect, disconnect, failure, scratch, seed, sql, type Fixtures } from './db'
+import {
+  affected,
+  as,
+  connect,
+  createUser,
+  disconnect,
+  failure,
+  scratch,
+  seed,
+  sql,
+  type Fixtures,
+} from './db'
 
 let f: Fixtures
 
@@ -36,9 +47,10 @@ describe('create_organisation()', () => {
         as(f.rex, () => sql(`select public.create_organisation('Other', 'acme-db-test')`)),
       ),
     ).toMatch(/organisations_slug_key/)
+    // Anonymous callers cannot even reach the function: the grant, not the body, refuses.
     expect(
       await failure(as(null, () => sql(`select public.create_organisation('Anon', 'anon-org')`))),
-    ).toMatch(/not signed in/)
+    ).toMatch(/permission denied/)
   })
 })
 
@@ -270,5 +282,29 @@ describe('profiles', () => {
         ),
       ),
     ).toMatch(/must reference an organisation the user belongs to/)
+  })
+
+  it('are backfilled for users who predate the trigger, and only by an operator', async () => {
+    await scratch(async () => {
+      // A user from before on_auth_user_created existed: an auth row with no profile.
+      const old = await createUser('old@db.test', 'Old Timer')
+      await sql(`delete from public.profiles where id = $1`, [old.id])
+
+      expect(await sql(`select public.backfill_profiles() as n`)).toEqual([{ n: 1 }])
+      const [profile] = await sql<{ display_name: string; email: string; providers: string[] }>(
+        `select display_name, email, providers from public.profiles where id = $1`,
+        [old.id],
+      )
+      expect(profile).toEqual({
+        display_name: 'Old Timer',
+        email: 'old@db.test',
+        providers: ['email'],
+      })
+      expect(await sql(`select public.backfill_profiles() as n`)).toEqual([{ n: 0 }])
+
+      expect(await failure(as(f.olive, () => sql(`select public.backfill_profiles()`)))).toMatch(
+        /permission denied/,
+      )
+    })
   })
 })

@@ -129,7 +129,7 @@ describe('platform invitations', () => {
   it('add the right account to the team, once', async () => {
     await scratch(async () => {
       const [row] = await invite(f.pat, 'nina@db.test', 'admin')
-      expect(await failure(accept(null, row!.token))).toMatch(/not signed in/)
+      expect(await failure(accept(null, row!.token))).toMatch(/permission denied/)
       expect(await failure(accept(f.rex, row!.token))).toMatch(/different email/)
 
       await accept(f.nina, row!.token)

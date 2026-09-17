@@ -107,7 +107,7 @@ describe('accept_invitation()', () => {
   it('needs a session with the invited email, an unused link and an unexpired one', async () => {
     await scratch(async () => {
       const [row] = await invite(f.olive, 'rex@db.test', 'member')
-      expect(await failure(accept(null, row!.token))).toMatch(/not signed in/)
+      expect(await failure(accept(null, row!.token))).toMatch(/permission denied/)
       expect(await failure(accept(f.nina, row!.token))).toMatch(/different email/)
       expect(await failure(accept(f.rex, randomUUID()))).toMatch(/not found/)
 

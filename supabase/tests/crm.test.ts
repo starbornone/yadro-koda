@@ -48,6 +48,9 @@ describe('create_lead()', () => {
         as(f.sue, () => sql(`select public.create_lead('Initech', 'initech-db-test', 'event')`)),
       ),
     ).toMatch(/only platform admins/)
+    expect(
+      await failure(as(null, () => sql(`select public.create_lead('Initech', 'initech-db-test')`))),
+    ).toMatch(/permission denied/)
     await scratch(async () => {
       const [org] = await as(f.pat, () =>
         sql<{ id: string }>(
