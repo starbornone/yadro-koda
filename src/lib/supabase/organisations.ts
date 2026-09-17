@@ -100,6 +100,26 @@ export const updateOrganisation = async (
   return data
 }
 
+/**
+ * Deletes the organisation and everything it owns (memberships, invitations, the CRM record).
+ * Owners only, or a superadmin on the tenant's behalf (RLS). Returns null when nothing was
+ * deleted — RLS hid the row — so the caller can say so rather than assume.
+ */
+export const deleteOrganisation = async (orgId: string): Promise<Organisation | null> => {
+  const { data, error } = await supabase
+    .from('organisations')
+    .delete()
+    .eq('id', orgId)
+    .select('id, name, slug, created_at')
+    .maybeSingle()
+
+  if (error) {
+    throw error
+  }
+
+  return data
+}
+
 // ---------------------------------------------------------------------------
 // Members. Every member sees the list; owners and admins change roles and remove people, never
 // above their own tier, and the database keeps at least one owner (RLS + trigger).

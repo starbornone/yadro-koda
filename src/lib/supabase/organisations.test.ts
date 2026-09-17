@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createOrganisation,
+  deleteOrganisation,
   getMyMemberships,
   listMembers,
   removeMember,
@@ -99,6 +100,26 @@ describe('updateOrganisation', () => {
     expect(query.from).toHaveBeenCalledWith('organisations')
     expect(query.builder.update).toHaveBeenCalledWith({ name: 'Acme Ltd' })
     expect(query.builder.eq).toHaveBeenCalledWith('id', 'org-1')
+  })
+})
+
+describe('deleteOrganisation', () => {
+  it('deletes by id and returns the row, or null when RLS hid it', async () => {
+    query.builder.maybeSingle.mockResolvedValueOnce({ data: org, error: null })
+    await expect(deleteOrganisation('org-1')).resolves.toEqual(org)
+    expect(query.from).toHaveBeenCalledWith('organisations')
+    expect(query.builder.delete).toHaveBeenCalled()
+    expect(query.builder.eq).toHaveBeenCalledWith('id', 'org-1')
+
+    query.builder.maybeSingle.mockResolvedValueOnce({ data: null, error: null })
+    await expect(deleteOrganisation('org-1')).resolves.toBeNull()
+  })
+
+  it('throws the Supabase error', async () => {
+    const error = new Error('permission denied for table organisations')
+    query.builder.maybeSingle.mockResolvedValueOnce({ data: null, error })
+
+    await expect(deleteOrganisation('org-1')).rejects.toBe(error)
   })
 })
 
