@@ -182,6 +182,7 @@ const invitations: Invitation[] = [
     token: '0f4b9a1e-2c3d-4e5f-8a6b-7c8d9e0f1a2b',
     invited_by: 'user-2',
     expires_at: '2999-01-01T00:00:00Z',
+    access_expires_at: null,
     accepted_at: null,
     created_at: '2026-09-01T00:00:00Z',
   },
@@ -408,6 +409,7 @@ describe('StaffOrganisationPage as superadmin', () => {
     expect(invitationsApi.createInvitation).toHaveBeenCalledWith('org-1', {
       email: 'alan@acme.test',
       role: 'owner',
+      access_expires_at: null,
     })
   })
 

@@ -121,6 +121,7 @@ export const StaffOrganisationPage = () => {
             assignableRoles={assignableRoles}
             roleLabels={ORG_ROLE_LABELS}
             description="Invite someone to this organisation on its behalf, then send them the link. They join once they sign in with that address and open it."
+            timeBoxed
             create={(input) => createInvitation(organisation.id, input)}
             revoke={revokeInvitation}
           />
