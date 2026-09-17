@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import type { Database } from './database.types'
 
 const url = import.meta.env.VITE_SUPABASE_URL
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
@@ -19,10 +20,12 @@ if (!isSupabaseConfigured) {
   console.warn(`${SUPABASE_NOT_CONFIGURED_MESSAGE} The public site works; sign-in will not.`)
 }
 
+// `Database` is generated from the live schema (see supabase/README.md), so table names,
+// columns, enums and RPC signatures are checked at compile time.
 export const supabase = isSupabaseConfigured
-  ? createClient(url, publishableKey)
+  ? createClient<Database>(url, publishableKey)
   : // A syntactically valid but unreachable target, with fetch short-circuited so every call
     // returns the configuration error through the normal `{ error }` channel.
-    createClient('https://supabase.invalid', 'unconfigured', {
+    createClient<Database>('https://supabase.invalid', 'unconfigured', {
       global: { fetch: () => Promise.reject(new Error(SUPABASE_NOT_CONFIGURED_MESSAGE)) },
     })

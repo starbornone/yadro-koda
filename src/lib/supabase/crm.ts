@@ -237,7 +237,8 @@ export const createLead = async (input: CreateLeadInput): Promise<Organisation> 
   const { data, error } = await supabase.rpc('create_lead', {
     name: input.name.trim(),
     slug: input.slug,
-    source: blankToNull(input.source ?? null),
+    // The parameter defaults to null; omitting it is how PostgREST says "no source".
+    source: blankToNull(input.source) ?? undefined,
   })
 
   if (error) {

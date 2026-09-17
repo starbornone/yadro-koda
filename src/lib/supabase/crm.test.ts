@@ -208,10 +208,11 @@ describe('writes', () => {
     await expect(createLead({ name: ' Initech ', slug: 'initech', source: '' })).resolves.toEqual({
       id: 'org-9',
     })
+    // A blank source is omitted, which PostgREST reads as the parameter's default (null).
     expect(query.rpc).toHaveBeenCalledWith('create_lead', {
       name: 'Initech',
       slug: 'initech',
-      source: null,
+      source: undefined,
     })
   })
 
