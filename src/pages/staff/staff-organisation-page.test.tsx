@@ -11,6 +11,7 @@ vi.mock('@/lib/supabase/supabase', () => ({ supabase: {} }))
 
 const organisations = vi.hoisted(() => ({
   updateOrganisation: vi.fn(),
+  deleteOrganisation: vi.fn(),
   updateMembershipRole: vi.fn(),
   removeMember: vi.fn(),
 }))
@@ -416,5 +417,22 @@ describe('StaffOrganisationPage as superadmin', () => {
     await screen.findByRole('heading', { level: 1, name: 'Acme' })
     expect(screen.queryByRole('button', { name: /Change role/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Invitations' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete organisation' })).not.toBeInTheDocument()
+  })
+
+  it('can delete the organisation on its behalf and returns to the list', async () => {
+    organisations.deleteOrganisation.mockResolvedValue(organisation)
+    const user = userEvent.setup()
+    const { router } = renderPage('superadmin')
+    const invalidate = vi.spyOn(router, 'invalidate')
+
+    await user.click(await screen.findByRole('button', { name: 'Delete organisation' }))
+    const dialog = within(await screen.findByRole('alertdialog'))
+    await user.type(dialog.getByLabelText('URL name'), 'acme')
+    await user.click(dialog.getByRole('button', { name: 'Delete' }))
+
+    expect(organisations.deleteOrganisation).toHaveBeenCalledWith('org-1')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/staff/organisations'))
+    expect(invalidate).toHaveBeenCalled()
   })
 })

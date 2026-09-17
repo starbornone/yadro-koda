@@ -10,6 +10,7 @@ import { ContactsSection } from '@/features/crm/components/contacts-section'
 import { PipelineForm } from '@/features/crm/components/pipeline-form'
 import { StageBadge } from '@/features/crm/components/stage-badge'
 import { TasksSection } from '@/features/crm/components/tasks-section'
+import { DeleteOrganisationSection } from '@/features/organisations/components/delete-organisation-section'
 import { MembersSection } from '@/features/organisations/components/members-section'
 import { useStaffOrganisationPage } from '@/features/staff/hooks/use-staff-organisation-page'
 import { personName } from '@/lib/auth/display-user'
@@ -32,6 +33,8 @@ export const StaffOrganisationPage = () => {
     invitations,
     currentUserId,
     canRename,
+    canDelete,
+    afterDelete,
     canManageMember,
     assignableRoles,
     canManageCustomers,
@@ -159,6 +162,10 @@ export const StaffOrganisationPage = () => {
               </FieldGroup>
             </FieldSet>
           </form>
+        ) : null}
+
+        {canDelete ? (
+          <DeleteOrganisationSection organisation={organisation} afterDelete={afterDelete} />
         ) : null}
       </div>
     </>
