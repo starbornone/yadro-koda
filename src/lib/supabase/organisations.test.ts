@@ -7,6 +7,7 @@ import {
   removeMember,
   setActiveOrganisation,
   slugify,
+  updateMembershipExpiry,
   updateMembershipRole,
   updateOrganisation,
 } from './organisations'
@@ -151,6 +152,17 @@ describe('members', () => {
     expect(query.builder.update).toHaveBeenCalledWith({ role: 'admin' })
     expect(query.builder.eq).toHaveBeenNthCalledWith(1, 'org_id', 'org-1')
     expect(query.builder.eq).toHaveBeenNthCalledWith(2, 'user_id', 'user-2')
+  })
+
+  it('sets or clears one membership’s access end', async () => {
+    query.builder.eq.mockReturnValueOnce(query.builder).mockResolvedValueOnce({ error: null })
+    await updateMembershipExpiry('org-1', 'user-2', '2026-12-31T23:59:59.999Z')
+    expect(query.builder.update).toHaveBeenCalledWith({ expires_at: '2026-12-31T23:59:59.999Z' })
+    expect(query.builder.eq).toHaveBeenNthCalledWith(2, 'user_id', 'user-2')
+
+    query.builder.eq.mockReturnValueOnce(query.builder).mockResolvedValueOnce({ error: null })
+    await updateMembershipExpiry('org-1', 'user-2', null)
+    expect(query.builder.update).toHaveBeenLastCalledWith({ expires_at: null })
   })
 
   it('removes one membership and surfaces the last-owner refusal', async () => {

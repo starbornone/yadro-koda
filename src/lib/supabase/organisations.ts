@@ -157,6 +157,23 @@ export const updateMembershipRole = async (
   }
 }
 
+/** Time-boxed access: when this membership stops working, or null for no expiry. */
+export const updateMembershipExpiry = async (
+  orgId: string,
+  userId: string,
+  expiresAt: string | null,
+): Promise<void> => {
+  const { error } = await supabase
+    .from('memberships')
+    .update({ expires_at: expiresAt })
+    .eq('org_id', orgId)
+    .eq('user_id', userId)
+
+  if (error) {
+    throw error
+  }
+}
+
 export const removeMember = async (orgId: string, userId: string): Promise<void> => {
   const { error } = await supabase
     .from('memberships')
