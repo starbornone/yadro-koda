@@ -28,7 +28,10 @@ create table public.invitations (
   -- The secret in the link. A random uuid is 122 bits: not guessable.
   token uuid not null unique default gen_random_uuid(),
   invited_by uuid references public.profiles (id) on delete set null default auth.uid(),
+  -- When the link stops working.
   expires_at timestamptz not null default now() + interval '7 days',
+  -- When the membership it creates stops working (memberships.expires_at). NULL = never.
+  access_expires_at timestamptz,
   accepted_at timestamptz,
   accepted_by uuid references public.profiles (id) on delete set null,
   created_at timestamptz not null default now(),
@@ -39,6 +42,8 @@ comment on table public.invitations is
   'Pending and accepted invitations to join an organisation. The token is the link secret.';
 comment on column public.invitations.email is
   'Stored lower-cased; accept_invitation() only lets a session with this email accept.';
+comment on column public.invitations.access_expires_at is
+  'Copied to memberships.expires_at on accept: time-boxed access. NULL = no expiry.';
 
 create index invitations_org_id_idx on public.invitations (org_id);
 -- One open invitation per address per organisation. Revoke (delete) it to send a fresh one.
@@ -84,7 +89,7 @@ alter table public.platform_invitations enable row level security;
 revoke all on table public.invitations, public.platform_invitations from anon;
 -- Clients create and delete invitations; accepting is the RPCs' job.
 revoke insert, update on table public.invitations, public.platform_invitations from authenticated;
-grant insert (org_id, email, role) on table public.invitations to authenticated;
+grant insert (org_id, email, role, access_expires_at) on table public.invitations to authenticated;
 grant insert (email, role) on table public.platform_invitations to authenticated;
 
 create policy "invitations_select_manager_or_staff"
@@ -148,6 +153,7 @@ returns table (
   role text,
   invited_by_name text,
   expires_at timestamptz,
+  access_expires_at timestamptz,
   accepted_at timestamptz
 )
 language sql
@@ -162,6 +168,7 @@ as $$
     i.role::text,
     nullif(btrim(p.display_name), ''),
     i.expires_at,
+    i.access_expires_at,
     i.accepted_at
   from public.invitations i
   join public.organisations o on o.id = i.org_id
@@ -175,6 +182,7 @@ as $$
     i.role::text,
     nullif(btrim(p.display_name), ''),
     i.expires_at,
+    null,
     i.accepted_at
   from public.platform_invitations i
   left join public.profiles p on p.id = i.invited_by
@@ -185,10 +193,11 @@ revoke all on function public.get_invitation(uuid) from public;
 grant execute on function public.get_invitation(uuid) to anon, authenticated;
 
 -- ---------------------------------------------------------------------------
--- accept_invitation(): the caller joins the organisation with the invited role, the
--- invitation is marked used, and the organisation becomes their active one — atomically. The
--- caller's profile email must match the invitation's. Someone who already belongs keeps their
--- current role; if their access had expired it is restored.
+-- accept_invitation(): the caller joins the organisation with the invited role and access
+-- end, the invitation is marked used, and the organisation becomes their active one —
+-- atomically. The caller's profile email must match the invitation's. Someone who already
+-- belongs keeps their current role and takes the invitation's access end (which restores
+-- access that had expired).
 -- ---------------------------------------------------------------------------
 
 create or replace function public.accept_invitation(token uuid)
@@ -228,9 +237,9 @@ begin
       using errcode = 'insufficient_privilege';
   end if;
 
-  insert into public.memberships (org_id, user_id, role)
-  values (invitation.org_id, caller, invitation.role)
-  on conflict (org_id, user_id) do update set expires_at = null;
+  insert into public.memberships (org_id, user_id, role, expires_at)
+  values (invitation.org_id, caller, invitation.role, invitation.access_expires_at)
+  on conflict (org_id, user_id) do update set expires_at = excluded.expires_at;
 
   update public.invitations
   set accepted_at = now(), accepted_by = caller

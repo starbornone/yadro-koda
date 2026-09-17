@@ -249,7 +249,7 @@ revoke all on table public.organisations, public.memberships, public.platform_me
 -- and accept_invitation() (25_invitations.sql); managers may change a role or remove a row.
 revoke insert on table public.organisations from authenticated;
 revoke insert, update on table public.memberships from authenticated;
-grant update (role) on table public.memberships to authenticated;
+grant update (role, expires_at) on table public.memberships to authenticated;
 -- Staff are added through accept_platform_invitation() (25_invitations.sql); the tiers above
 -- a row may change or remove it.
 revoke insert on table public.platform_members from authenticated;
@@ -298,8 +298,9 @@ create policy "memberships_select_same_org_or_staff"
   using (public.is_org_member(org_id) or public.platform_can_access_org(org_id));
 
 -- Owners manage anyone; admins anyone below owner; nobody hands out a role above their own.
--- The UI also stops people changing their own row; the last-owner trigger below is the only
--- rule the database adds on top.
+-- The same people set or clear a member's `expires_at` (time-boxed access). The UI also stops
+-- people changing their own row; the last-owner trigger below is the only rule the database
+-- adds on top.
 create policy "memberships_update_manager_by_tier"
   on public.memberships
   for update
@@ -321,7 +322,9 @@ create policy "memberships_delete_self"
   using (user_id = (select auth.uid()));
 
 -- An organisation with no owner cannot be administered. Refuse the change that would cause
--- it — unless the organisation itself is being deleted and its rows are cascading away.
+-- it — removing, demoting or expiring the only owner whose access is current — unless the
+-- organisation itself is being deleted and its rows are cascading away. (An expiry set in the
+-- future is allowed; the clock will then do what this trigger cannot.)
 create or replace function public.protect_last_owner()
 returns trigger
 language plpgsql
@@ -330,7 +333,12 @@ set search_path = ''
 as $$
 begin
   if old.role = 'owner'
-     and (tg_op = 'DELETE' or new.role <> 'owner')
+     and (old.expires_at is null or old.expires_at > now())
+     and (
+       tg_op = 'DELETE'
+       or new.role <> 'owner'
+       or (new.expires_at is not null and new.expires_at <= now())
+     )
      and exists (select 1 from public.organisations o where o.id = old.org_id)
      and (
        select count(*) from public.memberships m
@@ -346,7 +354,7 @@ end;
 $$;
 
 create trigger memberships_protect_last_owner
-  before update of role or delete on public.memberships
+  before update of role, expires_at or delete on public.memberships
   for each row execute function public.protect_last_owner();
 
 -- Someone who leaves (or is removed) should not still "be working in" that organisation:
