@@ -168,6 +168,8 @@ describe('StaffTeamPage', () => {
     const section = within(await screen.findByRole('region', { name: 'Invitations' }))
     const role = section.getByLabelText('Role')
     expect(within(role).getByRole('option', { name: 'Admin' })).toBeInTheDocument()
+    // Staff access is not time-boxed, so no access-end field is offered.
+    expect(section.queryByLabelText('Access ends')).not.toBeInTheDocument()
     expect(within(role).queryByRole('option', { name: 'Superadmin' })).not.toBeInTheDocument()
     // A pending superadmin invitation is visible but out of an admin's reach.
     expect(section.getByText('margaret@example.com').closest('tr')).toHaveTextContent('Superadmin')

@@ -17,7 +17,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useRouteAction } from '@/hooks/use-route-action'
-import { formatDateTime } from '@/lib/format'
+import { endOfDay, formatDateTime, today } from '@/lib/format'
 import { invitationLink, invitationStatus } from '@/lib/supabase/invitations'
 
 /** What the section needs from an invitation, whichever table it came from. */
@@ -26,7 +26,17 @@ export type OpenInvitation<Role extends string> = {
   email: string
   role: Role
   token: string
+  /** When the link stops working. */
   expires_at: string
+  /** When the access it grants stops working; absent where access is not time-boxed. */
+  access_expires_at?: string | null
+}
+
+export type CreateInvitationInput<Role extends string> = {
+  email: string
+  role: Role
+  /** Only sent when the section offers time-boxed access. */
+  access_expires_at?: string | null
 }
 
 type InvitationsSectionProps<Role extends string> = {
@@ -37,7 +47,9 @@ type InvitationsSectionProps<Role extends string> = {
   roleLabels: Record<Role, string>
   /** Shown under the heading: who this invites, and to what. */
   description: string
-  create: (input: { email: string; role: Role }) => Promise<OpenInvitation<Role>>
+  /** Offer an optional "access ends" date, for memberships that can be time-boxed. */
+  timeBoxed?: boolean
+  create: (input: CreateInvitationInput<Role>) => Promise<OpenInvitation<Role>>
   revoke: (invitationId: string) => Promise<void>
 }
 
@@ -51,6 +63,7 @@ export function InvitationsSection<Role extends string>({
   assignableRoles,
   roleLabels,
   description,
+  timeBoxed = false,
   create,
   revoke,
 }: InvitationsSectionProps<Role>) {
@@ -58,6 +71,7 @@ export function InvitationsSection<Role extends string>({
   const [email, setEmail] = useState('')
   // Default to the least privileged role on offer.
   const [role, setRole] = useState<Role>(assignableRoles.at(-1)!)
+  const [accessEnds, setAccessEnds] = useState('')
   // The invitation just created, so its link can be shown right away.
   const [created, setCreated] = useState<OpenInvitation<Role> | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
@@ -66,8 +80,15 @@ export function InvitationsSection<Role extends string>({
   const handleInvite = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     void run('invite', async () => {
-      setCreated(await create({ email, role }))
+      setCreated(
+        await create({
+          email,
+          role,
+          ...(timeBoxed && { access_expires_at: accessEnds ? endOfDay(accessEnds) : null }),
+        }),
+      )
       setEmail('')
+      setAccessEnds('')
     })
   }
 
@@ -95,7 +116,7 @@ export function InvitationsSection<Role extends string>({
       <form onSubmit={handleInvite} className="max-w-md">
         <FieldGroup>
           <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
-            <Field>
+            <Field className="sm:col-span-2">
               <FieldLabel htmlFor="invite-email">Email</FieldLabel>
               <Input
                 id="invite-email"
@@ -121,6 +142,19 @@ export function InvitationsSection<Role extends string>({
                 ))}
               </NativeSelect>
             </Field>
+            {timeBoxed ? (
+              <Field>
+                <FieldLabel htmlFor="invite-access-ends">Access ends</FieldLabel>
+                <Input
+                  id="invite-access-ends"
+                  type="date"
+                  value={accessEnds}
+                  min={today()}
+                  onChange={(event) => setAccessEnds(event.target.value)}
+                />
+                <FieldDescription>Leave empty for no end date.</FieldDescription>
+              </Field>
+            ) : null}
           </div>
           {error ? (
             <Alert variant="destructive">
@@ -175,7 +209,8 @@ export function InvitationsSection<Role extends string>({
               <TableRow>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
-                <TableHead>Expires</TableHead>
+                {timeBoxed ? <TableHead>Access ends</TableHead> : null}
+                <TableHead>Link expires</TableHead>
                 <TableHead className="w-0" />
               </TableRow>
             </TableHeader>
@@ -188,6 +223,13 @@ export function InvitationsSection<Role extends string>({
                   <TableRow key={invitation.id}>
                     <TableCell className="font-medium">{invitation.email}</TableCell>
                     <TableCell>{roleLabels[invitation.role]}</TableCell>
+                    {timeBoxed ? (
+                      <TableCell className="text-muted-foreground">
+                        {invitation.access_expires_at
+                          ? formatDateTime(invitation.access_expires_at)
+                          : 'Never'}
+                      </TableCell>
+                    ) : null}
                     <TableCell className="text-muted-foreground">
                       {expired ? (
                         <Badge variant="destructive">Expired</Badge>
