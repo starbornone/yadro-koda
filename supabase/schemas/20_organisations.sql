@@ -244,10 +244,10 @@ alter table public.memberships enable row level security;
 alter table public.platform_members enable row level security;
 
 revoke all on table public.organisations, public.memberships, public.platform_members from anon;
--- Organisations are created through create_organisation() and create_lead() (30_crm.sql) and
--- never deleted from the client (yet). Memberships are created through create_organisation()
+-- Organisations are created through create_organisation() and create_lead() (30_crm.sql);
+-- owners delete them (policy below). Memberships are created through create_organisation()
 -- and accept_invitation() (25_invitations.sql); managers may change a role or remove a row.
-revoke insert, delete on table public.organisations from authenticated;
+revoke insert on table public.organisations from authenticated;
 revoke insert, update on table public.memberships from authenticated;
 grant update (role) on table public.memberships to authenticated;
 -- Staff are added through accept_platform_invitation() (25_invitations.sql); the tiers above
@@ -278,6 +278,18 @@ create policy "organisations_update_owner_admin_or_superadmin"
 -- Members can only change the organisation's name; the slug is fixed at creation for now.
 revoke update on table public.organisations from authenticated;
 grant update (name) on table public.organisations to authenticated;
+
+-- Deleting takes everything with it — memberships, invitations, the CRM record — so only an
+-- owner may (or a superadmin on the tenant's behalf). protect_last_owner() stands aside for
+-- the cascade.
+create policy "organisations_delete_owner_or_superadmin"
+  on public.organisations
+  for delete
+  to authenticated
+  using (
+    public.has_org_role(id, array['owner']::public.org_role[])
+    or public.platform_can_manage_org(id)
+  );
 
 create policy "memberships_select_same_org_or_staff"
   on public.memberships
