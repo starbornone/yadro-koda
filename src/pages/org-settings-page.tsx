@@ -11,12 +11,25 @@ import {
   FieldSet,
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { DeleteOrganisationSection } from '@/features/organisations/components/delete-organisation-section'
 import { useOrgSettingsPage } from '@/features/organisations/hooks/use-org-settings-page'
 import { ORG_ROLE_LABELS } from '@/lib/auth/permissions'
 
 export const OrgSettingsPage = () => {
-  const { org, role, canEdit, name, setName, isDirty, isSaving, error, message, handleSave } =
-    useOrgSettingsPage()
+  const {
+    org,
+    role,
+    canEdit,
+    canDelete,
+    name,
+    setName,
+    isDirty,
+    isSaving,
+    error,
+    message,
+    handleSave,
+    afterDelete,
+  } = useOrgSettingsPage()
 
   return (
     <>
@@ -74,6 +87,10 @@ export const OrgSettingsPage = () => {
               </FieldGroup>
             </FieldSet>
           </form>
+
+          {canDelete ? (
+            <DeleteOrganisationSection organisation={org} afterDelete={afterDelete} />
+          ) : null}
         </div>
       </div>
     </>

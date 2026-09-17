@@ -1,18 +1,23 @@
-import { screen } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderAuthenticated, testOrg } from '@/test/render-authenticated'
 import { OrgSettingsPage } from './org-settings-page'
 
-const updateOrganisation = vi.hoisted(() => vi.fn())
+const organisations = vi.hoisted(() => ({
+  updateOrganisation: vi.fn(),
+  deleteOrganisation: vi.fn(),
+}))
 vi.mock('@/lib/supabase/organisations', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/supabase/organisations')>()),
-  updateOrganisation,
+  ...organisations,
 }))
 vi.mock('@/lib/supabase/supabase', () => ({ supabase: {} }))
+const { updateOrganisation, deleteOrganisation } = organisations
 
 beforeEach(() => {
   updateOrganisation.mockReset()
+  deleteOrganisation.mockReset()
 })
 
 describe('OrgSettingsPage', () => {
@@ -58,5 +63,50 @@ describe('OrgSettingsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
 
     expect(await screen.findByText('permission denied for table organisations')).toBeInTheDocument()
+  })
+
+  it('lets only owners delete, after typing the URL name back', async () => {
+    deleteOrganisation.mockResolvedValue(testOrg)
+    const user = userEvent.setup()
+    const { router } = renderAuthenticated(<OrgSettingsPage />, { role: 'owner' })
+    const invalidate = vi.spyOn(router, 'invalidate')
+
+    await user.click(await screen.findByRole('button', { name: 'Delete organisation' }))
+    const dialog = within(await screen.findByRole('alertdialog'))
+    expect(dialog.getByRole('heading', { name: 'Delete Acme?' })).toBeInTheDocument()
+    const confirm = dialog.getByRole('button', { name: 'Delete' })
+    expect(confirm).toBeDisabled()
+
+    await user.type(dialog.getByLabelText('URL name'), 'acme-ltd')
+    expect(confirm).toBeDisabled()
+    await user.clear(dialog.getByLabelText('URL name'))
+    await user.type(dialog.getByLabelText('URL name'), 'acme')
+    expect(confirm).toBeEnabled()
+    await user.click(confirm)
+
+    expect(deleteOrganisation).toHaveBeenCalledWith('org-1')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/app'))
+    expect(invalidate).toHaveBeenCalled()
+  })
+
+  it('keeps the dialog open and explains when nothing was deleted', async () => {
+    deleteOrganisation.mockResolvedValue(null)
+    const user = userEvent.setup()
+    renderAuthenticated(<OrgSettingsPage />, { role: 'owner' })
+
+    await user.click(await screen.findByRole('button', { name: 'Delete organisation' }))
+    const dialog = within(await screen.findByRole('alertdialog'))
+    await user.type(dialog.getByLabelText('URL name'), 'acme')
+    await user.click(dialog.getByRole('button', { name: 'Delete' }))
+
+    expect(await dialog.findByText(/Nothing was deleted/)).toBeInTheDocument()
+    expect(dialog.getByRole('button', { name: 'Delete' })).toBeEnabled()
+  })
+
+  it('offers no deletion to admins', async () => {
+    renderAuthenticated(<OrgSettingsPage />, { role: 'admin' })
+
+    await screen.findByLabelText('Organisation name')
+    expect(screen.queryByRole('button', { name: 'Delete organisation' })).not.toBeInTheDocument()
   })
 })
