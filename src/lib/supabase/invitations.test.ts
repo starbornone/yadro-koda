@@ -149,19 +149,31 @@ describe('revokeInvitation', () => {
 })
 
 describe('getInvitation', () => {
-  it('asks the database for the preview behind a token', async () => {
-    const preview = {
+  it('asks the database for the preview behind a token and types it by kind', async () => {
+    const row = {
+      kind: 'organisation',
       organisation_name: 'Acme',
       email: 'grace@acme.test',
       role: 'member',
       invited_by_name: 'Ada',
       expires_at: '2999-01-01T00:00:00Z',
+      access_expires_at: null,
       accepted_at: null,
     }
-    query.builder.maybeSingle.mockResolvedValue({ data: preview, error: null })
+    query.builder.maybeSingle.mockResolvedValue({ data: row, error: null })
 
-    await expect(getInvitation(TOKEN)).resolves.toEqual(preview)
+    await expect(getInvitation(TOKEN)).resolves.toEqual(row)
     expect(query.rpc).toHaveBeenCalledWith('get_invitation', { token: TOKEN })
+
+    query.builder.maybeSingle.mockResolvedValue({
+      data: { ...row, kind: 'platform', organisation_name: null, role: 'support' },
+      error: null,
+    })
+    await expect(getInvitation(TOKEN)).resolves.toMatchObject({
+      kind: 'platform',
+      organisation_name: null,
+      role: 'support',
+    })
   })
 
   it('is null for an unknown token, without a round trip for a malformed one', async () => {

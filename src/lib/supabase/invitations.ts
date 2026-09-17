@@ -1,5 +1,7 @@
+import type { Database } from './database.types'
 import type { OrgRole, Organisation } from './organisations'
 import type { PlatformRole } from './platform'
+import { requireRow } from './require-row'
 import { supabase } from './supabase'
 
 /**
@@ -62,6 +64,31 @@ export const invitationLink = (token: string, origin = window.location.origin) =
 const INVITATION_SELECT =
   'id, org_id, email, role, token, invited_by, expires_at, access_expires_at, accepted_at, created_at'
 
+/**
+ * `get_invitation()` returns `role` as text because the two kinds carry different enums, and
+ * cannot mark its nullable columns; `kind` says which enum applies, and the app's type says
+ * what may be null.
+ */
+const toPreview = (
+  row: Database['public']['Functions']['get_invitation']['Returns'][number],
+): InvitationPreview => {
+  const shared = {
+    email: row.email,
+    invited_by_name: row.invited_by_name,
+    expires_at: row.expires_at,
+    access_expires_at: row.access_expires_at,
+    accepted_at: row.accepted_at,
+  }
+  return row.kind === 'platform'
+    ? { ...shared, kind: 'platform', organisation_name: null, role: row.role as PlatformRole }
+    : {
+        ...shared,
+        kind: 'organisation',
+        organisation_name: row.organisation_name,
+        role: row.role as OrgRole,
+      }
+}
+
 // Tokens are uuids; anything else cannot be an invitation, so skip the round trip (and the
 // database's "invalid input syntax" error) for a mistyped link.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -79,7 +106,7 @@ export const listInvitations = async (orgId: string): Promise<Invitation[]> => {
     throw error
   }
 
-  return (data ?? []) as unknown as Invitation[]
+  return data
 }
 
 export type CreateInvitationInput = {
@@ -109,7 +136,7 @@ export const createInvitation = async (
     throw error
   }
 
-  return data as unknown as Invitation
+  return data
 }
 
 export const revokeInvitation = async (invitationId: string): Promise<void> => {
@@ -130,7 +157,7 @@ export const getInvitation = async (token: string): Promise<InvitationPreview | 
     throw error
   }
 
-  return data as InvitationPreview | null
+  return data ? toPreview(data) : null
 }
 
 /** Joins the organisation as the invited role and makes it the caller's active one. */
@@ -141,7 +168,7 @@ export const acceptInvitation = async (token: string): Promise<Organisation> => 
     throw error
   }
 
-  return data as Organisation
+  return requireRow(data)
 }
 
 /** Joins the staff team as the invited role. */
