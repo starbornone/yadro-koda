@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import type { FormEvent } from 'react'
-import { getRouteApi, useRouter } from '@tanstack/react-router'
+import { getRouteApi, useNavigate, useRouter } from '@tanstack/react-router'
 import { authenticatedRoute } from '@/lib/auth/authenticated-route'
 import { ORG_ROLES, canOnPlatform } from '@/lib/auth/permissions'
 import { staffRoute } from '@/lib/auth/staff-route'
@@ -14,6 +14,7 @@ const route = getRouteApi('/_authenticated/_staff/staff/organisations/$orgId')
  */
 export const useStaffOrganisationPage = () => {
   const router = useRouter()
+  const navigate = useNavigate()
   const { user } = authenticatedRoute.useRouteContext()
   const { platformRole } = staffRoute.useLoaderData()
   const { organisation, customer, contacts, activities, tasks, staff, invitations } =
@@ -51,6 +52,14 @@ export const useStaffOrganisationPage = () => {
     [canManageOrganisation, isDirty, isSaving, name, organisation.id, router],
   )
 
+  // Leave the record before refreshing: its loader would report the organisation missing.
+  // The list fetches fresh on arrival; the invalidate is for `_authenticated` (the viewer may
+  // have been a member too).
+  const afterDelete = useCallback(async () => {
+    await navigate({ to: '/staff/organisations' })
+    await router.invalidate()
+  }, [navigate, router])
+
   return {
     organisation,
     customer,
@@ -61,6 +70,8 @@ export const useStaffOrganisationPage = () => {
     invitations,
     currentUserId: user.id,
     canRename: canManageOrganisation,
+    canDelete: canManageOrganisation,
+    afterDelete,
     // Staff who may write for the tenant act as an owner would: any member, any role.
     canManageMember: () => canManageOrganisation,
     assignableRoles: canManageOrganisation ? ORG_ROLES : [],
