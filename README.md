@@ -41,19 +41,20 @@ fields they own.
 
 ## Scripts
 
-| Script              | What it does                              |
-| ------------------- | ----------------------------------------- |
-| `pnpm dev`          | Start the Vite dev server with HMR        |
-| `pnpm build`        | Typecheck (`tsc -b`) and build to `dist/` |
-| `pnpm preview`      | Serve the production build locally        |
-| `pnpm typecheck`    | Typecheck only                            |
-| `pnpm lint`         | ESLint                                    |
-| `pnpm lint:fix`     | ESLint with autofix                       |
-| `pnpm format`       | Prettier, write                           |
-| `pnpm format:check` | Prettier, check only                      |
-| `pnpm test`         | Vitest, single run                        |
-| `pnpm test:watch`   | Vitest in watch mode                      |
-| `pnpm db:check`     | Parse the SQL schema (no database needed) |
+| Script              | What it does                                                         |
+| ------------------- | -------------------------------------------------------------------- |
+| `pnpm dev`          | Start the Vite dev server with HMR                                   |
+| `pnpm build`        | Typecheck (`tsc -b`) and build to `dist/`                            |
+| `pnpm preview`      | Serve the production build locally                                   |
+| `pnpm typecheck`    | Typecheck only                                                       |
+| `pnpm lint`         | ESLint                                                               |
+| `pnpm lint:fix`     | ESLint with autofix                                                  |
+| `pnpm format`       | Prettier, write                                                      |
+| `pnpm format:check` | Prettier, check only                                                 |
+| `pnpm test`         | Vitest, single run                                                   |
+| `pnpm test:watch`   | Vitest in watch mode                                                 |
+| `pnpm db:check`     | Parse the SQL schema (no database needed)                            |
+| `pnpm db:types`     | Regenerate `database.types.ts` from a live database (`DATABASE_URL`) |
 
 ## Project layout
 
@@ -71,7 +72,8 @@ src/
     auth/               # Session store, route APIs (_authenticated, _app, _staff), permissions
     format.ts           # Date formatting
     theme/              # Theme store: light / dark / system, persisted, applied to <html>
-    supabase/           # Supabase client; profile, organisation, invitation, platform, CRM queries
+    supabase/           # Supabase client (typed by the generated database.types.ts); profile,
+                        # organisation, invitation, platform and CRM queries
   features/
     auth/               # Auth layout, login / sign-up / reset forms and hooks
     organisations/      # Create-organisation form, members and delete-organisation sections,
