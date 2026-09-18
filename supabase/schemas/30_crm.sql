@@ -38,6 +38,11 @@ create table public.customers (
   owner_id uuid references public.platform_members (user_id) on delete set null,
   -- Where the lead came from (free text: "website", "referral from Acme", …).
   source text check (source is null or char_length(source) between 1 and 100),
+  -- What the product records about a customer beyond the pipeline — size, segment, what they
+  -- asked for — as an object of product-defined fields (src/config/customer-fields.ts). The
+  -- database keeps it an object of modest size; the app knows the fields.
+  details jsonb not null default '{}'::jsonb
+    check (jsonb_typeof(details) = 'object' and pg_column_size(details) <= 16384),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -281,7 +286,7 @@ revoke all on table public.customers, public.contacts, public.activities, public
 -- customers: rows come and go with their organisation (trigger + cascade), never directly.
 revoke insert, delete on table public.customers from authenticated;
 revoke update on table public.customers from authenticated;
-grant update (stage, owner_id, source) on table public.customers to authenticated;
+grant update (stage, owner_id, source, details) on table public.customers to authenticated;
 
 create policy "customers_select_staff"
   on public.customers
@@ -410,7 +415,12 @@ revoke all on table public.customer_stage_counts from anon;
 -- owned by whoever entered it. Its first user arrives by invitation (25_invitations.sql).
 -- ---------------------------------------------------------------------------
 
-create or replace function public.create_lead(name text, slug text, source text default null)
+create or replace function public.create_lead(
+  name text,
+  slug text,
+  source text default null,
+  details jsonb default '{}'::jsonb
+)
 returns public.organisations
 language plpgsql
 security definer
@@ -433,12 +443,15 @@ begin
   perform set_config('app.customer_stage', '', true);
 
   update public.customers
-  set owner_id = caller, source = nullif(btrim(create_lead.source), '')
+  set
+    owner_id = caller,
+    source = nullif(btrim(create_lead.source), ''),
+    details = coalesce(create_lead.details, '{}'::jsonb)
   where org_id = org.id;
 
   return org;
 end;
 $$;
 
-revoke all on function public.create_lead(text, text, text) from public, anon, authenticated;
-grant execute on function public.create_lead(text, text, text) to authenticated;
+revoke all on function public.create_lead(text, text, text, jsonb) from public, anon, authenticated;
+grant execute on function public.create_lead(text, text, text, jsonb) to authenticated;

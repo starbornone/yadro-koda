@@ -57,11 +57,15 @@ describe('create_lead()', () => {
           `select id from public.create_lead('Initech', 'initech-db-test', '  event ')`,
         ),
       )
-      const [customer] = await sql<{ stage: string; owner_id: string; source: string }>(
-        `select stage, owner_id, source from public.customers where org_id = $1`,
-        [org!.id],
-      )
-      expect(customer).toEqual({ stage: 'lead', owner_id: f.pat.id, source: 'event' })
+      const [customer] = await sql<{
+        stage: string
+        owner_id: string
+        source: string
+        details: unknown
+      }>(`select stage, owner_id, source, details from public.customers where org_id = $1`, [
+        org!.id,
+      ])
+      expect(customer).toEqual({ stage: 'lead', owner_id: f.pat.id, source: 'event', details: {} })
       expect(
         await sql(`select 1 from public.memberships where org_id = $1`, [org!.id]),
       ).toHaveLength(0)
@@ -78,6 +82,57 @@ describe('create_lead()', () => {
       )
       expect(trial?.stage).toBe('trial')
     })
+  })
+
+  it('takes the product’s details along', async () => {
+    await scratch(async () => {
+      const [org] = await as(f.pat, () =>
+        sql<{ id: string }>(
+          `select id from public.create_lead('Initech', 'initech-db-test', null, $1::jsonb)`,
+          [JSON.stringify({ seats: 25, interests: ['core'] })],
+        ),
+      )
+      const [customer] = await sql<{ details: unknown }>(
+        `select details from public.customers where org_id = $1`,
+        [org!.id],
+      )
+      expect(customer?.details).toEqual({ seats: 25, interests: ['core'] })
+    })
+  })
+})
+
+describe('customer details', () => {
+  const setDetails = (actor: Fixtures['rex'], details: string) =>
+    as(actor, () =>
+      affected(`update public.customers set details = $2::jsonb where org_id = $1`, [
+        f.acme,
+        details,
+      ]),
+    )
+
+  it('are an object of modest size, whatever the product puts in it', async () => {
+    expect(await failure(setDetails(f.pat, '[1, 2]'))).toMatch(/customers_details_check/)
+    expect(await failure(setDetails(f.pat, '"text"'))).toMatch(/customers_details_check/)
+    expect(await failure(setDetails(f.pat, JSON.stringify({ big: 'x'.repeat(20_000) })))).toMatch(
+      /customers_details_check/,
+    )
+    await scratch(async () => {
+      expect(await setDetails(f.pat, JSON.stringify({ seats: 3, nested: { ok: true } }))).toBe(1)
+    })
+  })
+
+  it('are edited by the tiers that manage customers, read by all staff, and never by tenants', async () => {
+    expect(await setDetails(f.sue, '{"seats": 1}')).toBe(0)
+    expect(
+      await as(f.sue, () =>
+        sql(`select details from public.customers where org_id = $1`, [f.acme]),
+      ),
+    ).toEqual([{ details: {} }])
+    expect(
+      await as(f.olive, () =>
+        sql(`select details from public.customers where org_id = $1`, [f.acme]),
+      ),
+    ).toHaveLength(0)
   })
 })
 
