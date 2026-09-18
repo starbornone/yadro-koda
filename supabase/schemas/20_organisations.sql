@@ -215,8 +215,10 @@ as $$
     end;
 $$;
 
--- True when the caller and `target_user` are both current members of at least one common
--- organisation. Lets colleagues see each other's profiles without exposing anyone else's.
+-- True when the caller is a current member of an organisation `target_user` belongs to. Lets
+-- colleagues see each other's profiles without exposing anyone else's. The target's own access
+-- may have ended: their membership row is still in the organisation's list until someone
+-- removes it, and whoever manages that row needs to know whose it is.
 create or replace function public.shares_org_with(target_user uuid)
 returns boolean
 language sql
@@ -231,7 +233,6 @@ as $$
     where mine.user_id = (select auth.uid())
       and theirs.user_id = target_user
       and (mine.expires_at is null or mine.expires_at > now())
-      and (theirs.expires_at is null or theirs.expires_at > now())
   );
 $$;
 

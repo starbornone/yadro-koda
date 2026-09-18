@@ -252,6 +252,22 @@ describe('profiles', () => {
     expect(await sees(f.rex, f.rex)).toHaveLength(1)
   })
 
+  it('stay visible to colleagues after access ends, while the row is still in the list', async () => {
+    await scratch(async () => {
+      await sql(
+        `update public.memberships set expires_at = now() - interval '1 minute' where user_id = $1`,
+        [f.mia.id],
+      )
+      // The owner still sees whose row it is; Mia herself no longer sees anyone at Acme.
+      expect(
+        await as(f.olive, () => sql(`select id from public.profiles where id = $1`, [f.mia.id])),
+      ).toHaveLength(1)
+      expect(
+        await as(f.mia, () => sql(`select id from public.profiles where id = $1`, [f.olive.id])),
+      ).toHaveLength(0)
+    })
+  })
+
   it('let people edit their own display name, never their email or anyone else', async () => {
     await scratch(async () => {
       expect(
