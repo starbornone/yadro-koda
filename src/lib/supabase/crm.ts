@@ -77,6 +77,9 @@ export type Task = {
 }
 
 export type TaskWithOrganisation = Task & { organisation: Pick<Organisation, 'id' | 'name'> }
+export type ActivityWithOrganisation = Activity & {
+  organisation: Pick<Organisation, 'id' | 'name'>
+}
 
 export type CustomerRecord = {
   customer: Customer
@@ -202,6 +205,21 @@ export const getStageCounts = async (): Promise<Record<CustomerStage, number>> =
     counts[row.stage] = row.count
   }
   return counts
+}
+
+/** The newest entries on every customer's timeline, most recent first. */
+export const listRecentActivities = async (limit = 20): Promise<ActivityWithOrganisation[]> => {
+  const { data, error } = await supabase
+    .from('activities')
+    .select(`${ACTIVITY_SELECT}, organisation:organisations(id, name)` as const)
+    .order('occurred_at', { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    throw error
+  }
+
+  return data
 }
 
 /** The caller's open tasks across every customer, soonest due first. */

@@ -8,6 +8,7 @@ import {
   getStageCounts,
   isCustomerStage,
   listMyOpenTasks,
+  listRecentActivities,
   setTaskCompleted,
   updateCustomer,
 } from './crm'
@@ -21,6 +22,7 @@ const query = vi.hoisted(() => {
     eq: vi.fn(),
     is: vi.fn(),
     order: vi.fn(),
+    limit: vi.fn(),
     maybeSingle: vi.fn(),
   }
   return { builder, from: vi.fn((table: string) => (table ? builder : builder)), rpc: vi.fn() }
@@ -28,7 +30,7 @@ const query = vi.hoisted(() => {
 
 vi.mock('@/lib/supabase/supabase', () => ({ supabase: { from: query.from, rpc: query.rpc } }))
 
-const chainable = ['select', 'insert', 'update', 'delete', 'eq', 'is', 'order'] as const
+const chainable = ['select', 'insert', 'update', 'delete', 'eq', 'is', 'order', 'limit'] as const
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -126,6 +128,31 @@ describe('getStageCounts', () => {
       lost: 0,
     })
     expect(query.from).toHaveBeenCalledWith('customer_stage_counts')
+  })
+})
+
+describe('listRecentActivities', () => {
+  it('asks for the newest entries across every organisation, with where they happened', async () => {
+    query.builder.limit.mockResolvedValueOnce({
+      data: [{ id: 'act-1', kind: 'note', organisation: { id: 'org-1', name: 'Acme' } }],
+      error: null,
+    })
+
+    await expect(listRecentActivities()).resolves.toEqual([
+      { id: 'act-1', kind: 'note', organisation: { id: 'org-1', name: 'Acme' } },
+    ])
+    expect(query.from).toHaveBeenCalledWith('activities')
+    expect(query.builder.select).toHaveBeenCalledWith(
+      expect.stringContaining('organisation:organisations(id, name)'),
+    )
+    expect(query.builder.order).toHaveBeenCalledWith('occurred_at', { ascending: false })
+    expect(query.builder.limit).toHaveBeenCalledWith(20)
+  })
+
+  it('takes a limit and surfaces errors', async () => {
+    query.builder.limit.mockResolvedValueOnce({ data: null, error: new Error('nope') })
+    await expect(listRecentActivities(5)).rejects.toThrow('nope')
+    expect(query.builder.limit).toHaveBeenCalledWith(5)
   })
 })
 
