@@ -8,6 +8,7 @@ import {
   getStageCounts,
   isCustomerStage,
   listMyOpenTasks,
+  parseDetails,
   listRecentActivities,
   setTaskCompleted,
   updateCustomer,
@@ -47,6 +48,29 @@ describe('isCustomerStage', () => {
   })
 })
 
+describe('parseDetails', () => {
+  it('keeps what a field can hold and drops the rest', () => {
+    expect(
+      parseDetails({
+        industry: 'Care',
+        seats: 12,
+        budget: true,
+        interests: ['core', 'reporting'],
+        nested: { a: 1 },
+        mixed: ['a', 2],
+        nothing: null,
+      }),
+    ).toEqual({ industry: 'Care', seats: 12, budget: true, interests: ['core', 'reporting'] })
+  })
+
+  it('is empty for anything that is not an object', () => {
+    expect(parseDetails(undefined)).toEqual({})
+    expect(parseDetails(null)).toEqual({})
+    expect(parseDetails('x')).toEqual({})
+    expect(parseDetails(['a'])).toEqual({})
+  })
+})
+
 describe('getCustomerRecord', () => {
   it('reads the four tables and unwraps staff embeds to profiles', async () => {
     const linus = { id: 'user-2', display_name: 'Linus', email: null }
@@ -57,6 +81,7 @@ describe('getCustomerRecord', () => {
         stage: 'lead',
         owner_id: 'user-2',
         source: null,
+        details: { industry: 'Care', nested: { dropped: true } },
         updated_at: '',
         owner: { user_id: 'user-2', profile: linus },
       },
@@ -86,6 +111,7 @@ describe('getCustomerRecord', () => {
         stage: 'lead',
         owner_id: 'user-2',
         source: null,
+        details: { industry: 'Care' },
         updated_at: '',
         owner: linus,
       },
@@ -185,6 +211,8 @@ describe('writes', () => {
       owner_id: null,
       source: null,
     })
+    await updateCustomer('org-1', { details: { seats: 3 } })
+    expect(query.builder.update).toHaveBeenLastCalledWith({ details: { seats: 3 } })
 
     await addContact('org-1', {
       name: ' Grace ',
@@ -240,6 +268,15 @@ describe('writes', () => {
       name: 'Initech',
       slug: 'initech',
       source: undefined,
+      details: undefined,
+    })
+
+    await createLead({ name: 'Initech', slug: 'initech', details: { seats: 3 } })
+    expect(query.rpc).toHaveBeenLastCalledWith('create_lead', {
+      name: 'Initech',
+      slug: 'initech',
+      source: undefined,
+      details: { seats: 3 },
     })
   })
 

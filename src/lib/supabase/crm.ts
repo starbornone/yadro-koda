@@ -1,3 +1,4 @@
+import type { Json } from './database.types'
 import type { Organisation, PublicProfile } from './organisations'
 import { requireRow } from './require-row'
 import { supabase } from './supabase'
@@ -30,11 +31,36 @@ export type ActivityKind = 'note' | 'call' | 'email' | 'meeting' | 'stage_change
 /** What the database records on its own; clients cannot log these. */
 export type SystemActivityKind = 'stage_change' | 'joined'
 
+/** One value in `customers.details`: what a product-defined field holds. */
+export type DetailValue = string | number | boolean | string[]
+
+/**
+ * What the product records about a customer beyond the pipeline, keyed by field. The database
+ * stores an object; which keys mean what is the product's field schema
+ * (`src/config/customer-fields.ts`). Keys the schema no longer names are kept, not shown.
+ */
+export type CustomerDetails = Record<string, DetailValue>
+
+const isDetailValue = (value: unknown): value is DetailValue =>
+  typeof value === 'string' ||
+  typeof value === 'number' ||
+  typeof value === 'boolean' ||
+  (Array.isArray(value) && value.every((item) => typeof item === 'string'))
+
+/** The stored object as details: keeps what a field can hold, drops anything else. */
+export const parseDetails = (raw: Json | undefined): CustomerDetails => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  return Object.fromEntries(
+    Object.entries(raw).filter((entry): entry is [string, DetailValue] => isDetailValue(entry[1])),
+  )
+}
+
 export type Customer = {
   org_id: string
   stage: CustomerStage
   owner_id: string | null
   source: string | null
+  details: CustomerDetails
   updated_at: string
   /** The account manager's profile, when there is one. */
   owner: PublicProfile | null
@@ -97,7 +123,7 @@ type StaffEmbed = { user_id: string; profile: PublicProfile } | null
 const profileOf = (staff: StaffEmbed | undefined) => staff?.profile ?? null
 
 const CUSTOMER_SELECT =
-  `org_id, stage, owner_id, source, updated_at, owner:platform_members(${STAFF_EMBED})` as const
+  `org_id, stage, owner_id, source, details, updated_at, owner:platform_members(${STAFF_EMBED})` as const
 const CONTACT_SELECT =
   'id, org_id, name, email, phone, title, is_primary, user_id, created_by, created_at'
 const ACTIVITY_SELECT =
@@ -127,8 +153,8 @@ export const getCustomer = async (orgId: string): Promise<Customer | null> => {
   }
   if (!data) return null
 
-  const { owner, ...customer } = data
-  return { ...customer, owner: profileOf(owner) }
+  const { owner, details, ...customer } = data
+  return { ...customer, details: parseDetails(details), owner: profileOf(owner) }
 }
 
 export const listContacts = async (orgId: string): Promise<Contact[]> => {
@@ -243,7 +269,7 @@ export const listMyOpenTasks = async (userId: string): Promise<TaskWithOrganisat
 // Writes. Each returns nothing; callers `router.invalidate()` so the loaders re-read.
 // ---------------------------------------------------------------------------
 
-export type CustomerPatch = Partial<Pick<Customer, 'stage' | 'owner_id' | 'source'>>
+export type CustomerPatch = Partial<Pick<Customer, 'stage' | 'owner_id' | 'source' | 'details'>>
 
 export const updateCustomer = async (orgId: string, patch: CustomerPatch): Promise<void> => {
   const { error } = await supabase
@@ -256,15 +282,21 @@ export const updateCustomer = async (orgId: string, patch: CustomerPatch): Promi
   }
 }
 
-export type CreateLeadInput = { name: string; slug: string; source?: string | null }
+export type CreateLeadInput = {
+  name: string
+  slug: string
+  source?: string | null
+  details?: CustomerDetails
+}
 
 /** Staff enter an organisation that has no users yet. It starts at `lead`, owned by the caller. */
 export const createLead = async (input: CreateLeadInput): Promise<Organisation> => {
   const { data, error } = await supabase.rpc('create_lead', {
     name: input.name.trim(),
     slug: input.slug,
-    // The parameter defaults to null; omitting it is how PostgREST says "no source".
+    // The parameters have defaults; omitting one is how PostgREST says "not given".
     source: blankToNull(input.source) ?? undefined,
+    details: input.details,
   })
 
   if (error) {
