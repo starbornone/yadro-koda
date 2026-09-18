@@ -5,6 +5,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useRouteAction } from '@/hooks/use-route-action'
+import { ActivityEntry } from '@/features/crm/components/activity-entry'
 import { CUSTOMER_STAGE_LABELS } from '@/features/crm/stages'
 import { formatDay, today } from '@/lib/format'
 import { CUSTOMER_STAGES, setTaskCompleted } from '@/lib/supabase/crm'
@@ -12,7 +13,10 @@ import { cn } from '@/lib/utils'
 
 const route = getRouteApi('/_authenticated/_staff/staff')
 
-/** Counts across every organisation, the pipeline by stage, and the viewer's own follow-ups. */
+/**
+ * Counts across every organisation, the pipeline by stage, the viewer's own follow-ups, and
+ * the latest entries on every customer's timeline.
+ */
 export const StaffOverviewPage = () => {
   const overview = route.useLoaderData()
   const { busy, error, run } = useRouteAction()
@@ -135,6 +139,32 @@ export const StaffOverviewPage = () => {
                 )
               })}
             </ul>
+          )}
+        </section>
+
+        <section aria-labelledby="latest-heading" className="flex flex-col gap-3">
+          <div>
+            <h2 id="latest-heading" className="text-base font-medium">
+              Latest
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              What happened most recently, across every organisation.
+            </p>
+          </div>
+          {overview.activities.length === 0 ? (
+            <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+              Nothing logged yet.
+            </p>
+          ) : (
+            <ol className="flex flex-col divide-y rounded-xl border">
+              {overview.activities.map((activity) => (
+                <ActivityEntry
+                  key={activity.id}
+                  activity={activity}
+                  organisation={activity.organisation}
+                />
+              ))}
+            </ol>
           )}
         </section>
       </div>
