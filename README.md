@@ -59,6 +59,12 @@ fields they own.
 | `pnpm e2e`          | Run the browser tests against a live project (`SUPABASE_KEY`)        |
 | `pnpm e2e:ui`       | The same in Playwright's UI, for watching and stepping through       |
 
+## Docs
+
+[`docs/`](docs/README.md) holds what the code cannot say for itself: the products the platform
+is for ([OVI](docs/products/ovi.md), the first), what they need from it, and the
+[roadmap](docs/roadmap.md).
+
 ## Project layout
 
 ```
@@ -99,6 +105,7 @@ src/
     navigation/         # Nav items, organisation switcher, user menu
   hooks/                # Shared hooks (useIsMobile, useRouteAction)
   test/setup.ts         # Vitest setup: jest-dom matchers, jsdom stubs
+docs/                   # Product briefs, gap analyses, the roadmap
 e2e/                    # Playwright journeys (`*.spec.ts`) and their fixtures (`support/`)
 supabase/
   schemas/              # The declared schema, one file per concern
