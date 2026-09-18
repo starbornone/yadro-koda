@@ -128,6 +128,7 @@ export type Database = {
       customers: {
         Row: {
           created_at: string
+          details: NonNullable<Json>
           org_id: string
           owner_id: string | null
           source: string | null
@@ -136,6 +137,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          details?: NonNullable<Json>
           org_id: string
           owner_id?: string | null
           source?: string | null
@@ -144,6 +146,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          details?: NonNullable<Json>
           org_id?: string
           owner_id?: string | null
           source?: string | null
@@ -536,7 +539,7 @@ export type Database = {
       }
       can_manage_org_members: { Args: { target_org: string }; Returns: boolean }
       create_lead: {
-        Args: { name: string; slug: string; source?: string }
+        Args: { details?: Json; name: string; slug: string; source?: string }
         Returns: {
           created_at: string
           created_by: string | null

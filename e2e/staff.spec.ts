@@ -52,6 +52,18 @@ test.describe('the staff area', () => {
     await expect(timeline).toContainText('Called to welcome them aboard.')
     await expect(timeline).toContainText(`${sam.name} · Note`)
 
+    // The product's fields: filled in, saved, and still there after a reload.
+    const details = page.getByRole('region', { name: 'Details' })
+    await details.getByLabel('Industry').fill('Disability services')
+    await details.getByLabel('Size').selectOption('medium')
+    await details.getByLabel('Reporting').click()
+    await details.getByRole('button', { name: 'Save' }).click()
+    await expect(details.getByRole('status')).toHaveText('Saved.')
+    await page.reload()
+    await expect(details.getByLabel('Industry')).toHaveValue('Disability services')
+    await expect(details.getByLabel('Size')).toHaveValue('medium')
+    await expect(details.getByLabel('Reporting')).toBeChecked()
+
     // Both entries are now the latest thing on the overview, each pointing back here.
     await page.goto('/staff')
     const latest = page.getByRole('region', { name: 'Latest' })
@@ -81,6 +93,10 @@ test.describe('the staff area', () => {
     await expect(tessaPage.getByRole('heading', { name: org.name })).toBeVisible()
     await expect(tessaPage.getByRole('button', { name: 'Log activity' })).toBeVisible()
     await expect(tessaPage.getByRole('heading', { name: 'Invitations' })).toHaveCount(0)
+    const details = tessaPage.getByRole('region', { name: 'Details' })
+    await expect(details).toContainText('Disability services')
+    await expect(details).toContainText('11–50 people')
+    await expect(details.getByRole('button', { name: 'Save' })).toHaveCount(0)
 
     await page.goto('/staff/team')
     await expect(page.getByRole('row', { name: tessa.email })).toContainText('Support')
