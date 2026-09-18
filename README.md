@@ -56,6 +56,8 @@ fields they own.
 | `pnpm db:check`     | Parse the SQL schema (no database needed)                            |
 | `pnpm db:types`     | Regenerate `database.types.ts` from a live database (`DATABASE_URL`) |
 | `pnpm db:test`      | Run the schema tests against a live database (`DATABASE_URL`)        |
+| `pnpm e2e`          | Run the browser tests against a live project (`SUPABASE_KEY`)        |
+| `pnpm e2e:ui`       | The same in Playwright's UI, for watching and stepping through       |
 
 ## Project layout
 
@@ -97,9 +99,14 @@ src/
     navigation/         # Nav items, organisation switcher, user menu
   hooks/                # Shared hooks (useIsMobile, useRouteAction)
   test/setup.ts         # Vitest setup: jest-dom matchers, jsdom stubs
+e2e/                    # Playwright journeys (`*.spec.ts`) and their fixtures (`support/`)
+supabase/
+  schemas/              # The declared schema, one file per concern
+  migrations/           # What has been applied to the project, in order
+  tests/                # Schema tests: policies, triggers and RPCs as each kind of user
 ```
 
-Tests live next to the code they cover as `*.test.ts(x)`.
+Unit tests live next to the code they cover as `*.test.ts(x)`.
 
 Path alias: `@/` → `src/`.
 
@@ -283,9 +290,24 @@ policies, triggers and RPCs against a live database, impersonating users the way
 own users and organisation, and rolls everything back at the end, so they are safe to run
 against a project with data in it. They need `DATABASE_URL` in `.env.local`.
 
+**Browser tests** (`e2e/`, `pnpm e2e`) are Playwright driving the real app against the live
+project: the front door and its redirects, an organisation from founding through invitation,
+leaving and deletion, the staff area with the timeline the database writes, and time-boxed
+access from invitation to lockout and back. Nobody types a password: the suite creates its own
+users through the Auth admin API, mints each one a session the way a magic link would
+(`generateLink` + `verifyOtp`), and seeds it into the browser's storage so the page loads
+signed in (`e2e/support/people.ts`). `as(person)` in a test is a page signed in as that person;
+two people can be open side by side. Every user and organisation is named `e2e-…` after the
+run, deleted when the worker finishes, and swept by the next run if one was interrupted. Needs
+`SUPABASE_KEY` (the secret key) alongside the two `VITE_` variables in `.env.local`; the first
+run also needs `pnpm exec playwright install chromium`. The suite starts its own dev server on
+port 4173, so `pnpm dev` can keep running.
+
 CI (`.github/workflows/ci.yml`) runs format, lint, typecheck, schema check, test and build on
 every push to `main` and every pull request. A second job runs `pnpm db:test` when the
-repository has a `DATABASE_URL` secret and a `HAS_DATABASE_URL=true` variable.
+repository has a `DATABASE_URL` secret and a `HAS_DATABASE_URL=true` variable; a third runs
+`pnpm e2e` when it has `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_KEY`
+secrets and a `HAS_SUPABASE_KEY=true` variable, and keeps the Playwright report as an artifact.
 
 ## Conventions
 

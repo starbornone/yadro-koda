@@ -20,7 +20,9 @@
     "test:watch": "vitest",
     "db:check": "node scripts/check-schema.mjs",
     "db:types": "node scripts/gen-types.mjs",
-    "db:test": "vitest run --config vitest.db.config.ts"
+    "db:test": "vitest run --config vitest.db.config.ts",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@fontsource-variable/noto-sans": "^5.2.10",
@@ -39,6 +41,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@playwright/test": "^1.63.0",
     "@supabase/postgrest-typegen": "^0.2.2",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.1",
