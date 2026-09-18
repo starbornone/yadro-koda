@@ -1,15 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import {
-  ArrowRightLeftIcon,
-  CircleAlertIcon,
-  MailIcon,
-  MessageSquareTextIcon,
-  PhoneIcon,
-  Trash2Icon,
-  UserPlusIcon,
-  UsersRoundIcon,
-} from 'lucide-react'
+import { CircleAlertIcon, Trash2Icon } from 'lucide-react'
 import { ConfirmButton } from '@/components/confirm-button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -17,9 +8,8 @@ import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
 import { useRouteAction } from '@/hooks/use-route-action'
+import { ActivityEntry } from '@/features/crm/components/activity-entry'
 import { ACTIVITY_KIND_LABELS, LOGGABLE_ACTIVITY_KINDS } from '@/features/crm/stages'
-import { personName } from '@/lib/auth/display-user'
-import { formatDateTime } from '@/lib/format'
 import {
   addActivity,
   removeActivity,
@@ -37,15 +27,6 @@ type ActivitySectionProps = {
   canLog: boolean
   /** Whether the viewer may remove anyone's entry (superadmin, admin). */
   canManage: boolean
-}
-
-const KIND_ICONS: Record<Activity['kind'], typeof MailIcon> = {
-  note: MessageSquareTextIcon,
-  call: PhoneIcon,
-  email: MailIcon,
-  meeting: UsersRoundIcon,
-  stage_change: ArrowRightLeftIcon,
-  joined: UserPlusIcon,
 }
 
 /** The customer timeline: what staff logged, plus what the database recorded — stage changes and joins. */
@@ -148,31 +129,12 @@ export const ActivitySection = ({
       ) : (
         <ol className="flex flex-col divide-y rounded-xl border">
           {activities.map((activity) => {
-            const Icon = KIND_ICONS[activity.kind]
             // A join is linked to the joiner's own contact; "Joined with Rex" would misread.
             const withContact =
               activity.kind === 'joined' ? undefined : contactName(activity.contact_id)
             const canRemove = canManage || activity.created_by === currentUserId
             return (
-              <li key={activity.id} className="flex gap-3 p-4">
-                <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                  <Icon className="size-4" aria-label={ACTIVITY_KIND_LABELS[activity.kind]} />
-                </span>
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <p className="text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">
-                      {personName(activity.author)}
-                    </span>
-                    {' · '}
-                    {ACTIVITY_KIND_LABELS[activity.kind]}
-                    {withContact ? ` with ${withContact}` : ''}
-                    {' · '}
-                    <time dateTime={activity.occurred_at}>
-                      {formatDateTime(activity.occurred_at)}
-                    </time>
-                  </p>
-                  <p className="text-sm whitespace-pre-wrap">{activity.body}</p>
-                </div>
+              <ActivityEntry key={activity.id} activity={activity} withContact={withContact}>
                 {canRemove ? (
                   <ConfirmButton
                     variant="ghost"
@@ -186,7 +148,7 @@ export const ActivitySection = ({
                     <Trash2Icon />
                   </ConfirmButton>
                 ) : null}
-              </li>
+              </ActivityEntry>
             )
           })}
         </ol>

@@ -2,7 +2,8 @@ import { type Person } from './support/people'
 import { expect, test } from './support/test'
 
 // The platform's own people looking across tenants: the overview, one customer's record with
-// the timeline the database writes, growing the team, and choosing between two hats.
+// the timeline the database writes, the feed of it all, growing the team, and choosing between
+// two hats.
 test.describe.configure({ mode: 'serial' })
 
 test.describe('the staff area', () => {
@@ -50,6 +51,14 @@ test.describe('the staff area', () => {
     await page.getByRole('button', { name: 'Log activity' }).click()
     await expect(timeline).toContainText('Called to welcome them aboard.')
     await expect(timeline).toContainText(`${sam.name} · Note`)
+
+    // Both entries are now the latest thing on the overview, each pointing back here.
+    await page.goto('/staff')
+    const latest = page.getByRole('region', { name: 'Latest' })
+    const note = latest.getByRole('listitem').filter({ hasText: 'Called to welcome them aboard.' })
+    await expect(note).toContainText(`${sam.name} · Note · ${org.name} · `)
+    await note.getByRole('link', { name: org.name }).click()
+    await expect(page).toHaveURL(`/staff/organisations/${org.id}`)
   })
 
   test('the team grows by invitation, and the newcomer lands in the staff area', async ({ as }) => {

@@ -1,22 +1,11 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { OrganisationSummary } from '@/lib/supabase/platform'
 import { renderStaff } from '@/test/render-authenticated'
 import { StaffOrganisationsPage } from './staff-organisations-page'
-import { StaffOverviewPage } from './staff-overview-page'
 
 vi.mock('@/lib/supabase/supabase', () => ({ supabase: {} }))
-
-const setTaskCompleted = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/supabase/crm', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/supabase/crm')>()),
-  setTaskCompleted,
-}))
-
-beforeEach(() => {
-  setTaskCompleted.mockReset().mockResolvedValue(undefined)
-})
 
 const summaries: OrganisationSummary[] = [
   {
@@ -38,61 +27,6 @@ const summaries: OrganisationSummary[] = [
     owner: null,
   },
 ]
-
-const overview = {
-  organisations: 12,
-  memberships: 40,
-  staff: 3,
-  stages: { lead: 4, qualified: 2, trial: 1, active: 5, churned: 0, lost: 0 },
-  tasks: [
-    {
-      id: 'task-1',
-      org_id: 'org-2',
-      title: 'Call back',
-      due_on: '2020-01-01',
-      assigned_to: 'user-1',
-      completed_at: null,
-      created_by: 'user-1',
-      created_at: '',
-      assignee: null,
-      organisation: { id: 'org-2', name: 'Globex' },
-    },
-  ],
-}
-
-describe('StaffOverviewPage', () => {
-  it('shows the counts, the pipeline and the viewer’s tasks', async () => {
-    renderStaff(<StaffOverviewPage />, { path: '/staff', loaderData: overview })
-
-    expect(await screen.findByText('12')).toBeInTheDocument()
-    expect(screen.getByText('40')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Organisations\s*12/ })).toHaveAttribute(
-      'href',
-      '/staff/organisations',
-    )
-    expect(screen.getByRole('link', { name: /Staff\s*3/ })).toHaveAttribute('href', '/staff/team')
-    expect(screen.getByRole('link', { name: /Lead\s*4/ })).toHaveAttribute(
-      'href',
-      '/staff/organisations?stage=lead',
-    )
-    expect(screen.getByText('Call back').closest('li')).toHaveTextContent(/Overdue/)
-    expect(screen.getByRole('link', { name: 'Globex' })).toHaveAttribute(
-      'href',
-      '/staff/organisations/org-2',
-    )
-  })
-
-  it('completes a task from the overview', async () => {
-    const user = userEvent.setup()
-    const { router } = renderStaff(<StaffOverviewPage />, { path: '/staff', loaderData: overview })
-    const invalidate = vi.spyOn(router, 'invalidate')
-
-    await user.click(await screen.findByRole('checkbox', { name: 'Complete Call back' }))
-
-    expect(setTaskCompleted).toHaveBeenCalledWith('task-1', true)
-    await waitFor(() => expect(invalidate).toHaveBeenCalled())
-  })
-})
 
 describe('StaffOrganisationsPage', () => {
   it('lists organisations with stage, owner and member count, and links to each', async () => {

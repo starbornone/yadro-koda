@@ -112,25 +112,25 @@ Path alias: `@/` → `src/`.
 
 ## Routes
 
-| Path                     | Who                  | What                                                           |
-| ------------------------ | -------------------- | -------------------------------------------------------------- |
-| `/`                      | everyone             | Marketing home; signed-in visitors get a Dashboard CTA         |
-| `/login`                 | signed out           | Sign in (`?redirect=` honoured); signed in → /accounts         |
-| `/signup`                | signed out           | Create account; signed in → /accounts                          |
-| `/reset-password`        | from the email link  | Set a new password, or request a fresh link                    |
-| `/invite/$token`         | from the invite link | What the invitation is; sign in, sign up or accept             |
-| `/accounts`              | signed in            | Choose where to go: staff area or an organisation              |
-| `/onboarding`            | signed in, no org    | Create your first organisation                                 |
-| `/app`                   | signed in + member   | Dashboard, inside the active organisation                      |
-| `/app/settings`          | signed in + member   | Organisation settings (owners/admins edit; owners delete)      |
-| `/app/members`           | signed in + member   | Who belongs; owners/admins invite, change roles, remove; leave |
-| `/app/organisations/new` | signed in + member   | Create another organisation                                    |
-| `/app/profile`           | signed in + member   | Profile, password, account, sign-out                           |
-| `/staff`                 | staff                | Overview: counts, pipeline by stage, your open tasks           |
-| `/staff/organisations`   | staff                | Every organisation (`?q=`, `?stage=`); `new` for leads         |
-| `/staff/organisations/…` | staff                | Customer record: pipeline, contacts, tasks, members            |
-| `/staff/team`            | staff                | Platform members; admins and up invite, change, remove         |
-| `/staff/profile`         | staff                | The profile page, inside the staff shell                       |
+| Path                     | Who                  | What                                                            |
+| ------------------------ | -------------------- | --------------------------------------------------------------- |
+| `/`                      | everyone             | Marketing home; signed-in visitors get a Dashboard CTA          |
+| `/login`                 | signed out           | Sign in (`?redirect=` honoured); signed in → /accounts          |
+| `/signup`                | signed out           | Create account; signed in → /accounts                           |
+| `/reset-password`        | from the email link  | Set a new password, or request a fresh link                     |
+| `/invite/$token`         | from the invite link | What the invitation is; sign in, sign up or accept              |
+| `/accounts`              | signed in            | Choose where to go: staff area or an organisation               |
+| `/onboarding`            | signed in, no org    | Create your first organisation                                  |
+| `/app`                   | signed in + member   | Dashboard, inside the active organisation                       |
+| `/app/settings`          | signed in + member   | Organisation settings (owners/admins edit; owners delete)       |
+| `/app/members`           | signed in + member   | Who belongs; owners/admins invite, change roles, remove; leave  |
+| `/app/organisations/new` | signed in + member   | Create another organisation                                     |
+| `/app/profile`           | signed in + member   | Profile, password, account, sign-out                            |
+| `/staff`                 | staff                | Overview: counts, pipeline by stage, your tasks, latest entries |
+| `/staff/organisations`   | staff                | Every organisation (`?q=`, `?stage=`); `new` for leads          |
+| `/staff/organisations/…` | staff                | Customer record: pipeline, contacts, tasks, members             |
+| `/staff/team`            | staff                | Platform members; admins and up invite, change, remove          |
+| `/staff/profile`         | staff                | The profile page, inside the staff shell                        |
 
 Every route sets its `<title>` via TanStack's `head()`; the home page also sets a meta
 description. Marketing copy is placeholder and lives in `src/features/marketing/content.ts`.
@@ -234,6 +234,10 @@ staff know about it lives in tables tenants cannot read (`supabase/schemas/30_cr
   itself: stage changes, and people joining ("Created the organisation", "Accepted an
   invitation as admin") — the moment a lead becomes a tenant, in the record.
 - `tasks` — follow-ups with a due date and a staff assignee; the overview lists yours.
+
+The overview's **Latest** section is the newest entries from every timeline in one list — a join
+here, a stage change there, a colleague's call — each linking to its customer record: the
+morning read.
 
 Every staff tier reads all of it and logs activity; moving the pipeline (stage, owner, source,
 new leads) needs `platform:manage-customers` — superadmin and admin — enforced in SQL by
