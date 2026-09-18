@@ -231,9 +231,15 @@ staff know about it lives in tables tenants cannot read (`supabase/schemas/30_cr
 
 - `customers` — one row per organisation, created by trigger: `stage` (`lead` → `qualified` →
   `trial` → `active`, or `churned` / `lost` — a generic funnel a product renames), `owner_id`
-  (the responsible staff member) and `source`. A self-serve sign-up starts at `trial`;
-  `create_lead()` starts at `lead`, owned by whoever entered it. Every stage change is logged to
-  the timeline by trigger.
+  (the responsible staff member), `source`, and `details` — what the product records beyond
+  the pipeline (size, segment, what they asked for) as an object of **product-defined fields**.
+  The list of fields is [`src/config/customer-fields.ts`](src/config/customer-fields.ts): text,
+  number, select, multiselect or boolean, each with a key in `details`. The record page renders
+  them (a form for the tiers that manage customers, read-only for the rest), the new-lead form
+  asks for them, and the database keeps the object well-formed and small without knowing the
+  keys, so a product changes its fields without a migration. A self-serve sign-up starts at
+  `trial`; `create_lead()` starts at `lead`, owned by whoever entered it, with the details given.
+  Every stage change is logged to the timeline by trigger.
 - `contacts` — people at the customer, whether or not they have a sign-in; one primary per
   organisation. `user_id` links a contact to their account: set by trigger when someone joins
   the organisation with the same email (typically by accepting an invitation), never by hand.

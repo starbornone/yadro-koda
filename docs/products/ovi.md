@@ -101,17 +101,54 @@ What the platform has today against each need, and where the fix belongs. _Frame
 is generic enough for any B2B product on the platform; _product_ means OVI-specific, kept in
 OVI's own configuration or migrations.
 
-| #   | Need                             | Today                                                                                                              | Gap                                                                                                                                                                                                                                                                         | Where                               | Status   |
-| --- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | -------- |
-| 1   | Inbound lead capture             | Leads are entered by staff (`create_lead()`, staff-only) or arrive via self-serve sign-up, which starts at `trial` | No anonymous door. An anon-callable RPC or Edge Function creating the organisation as a lead with the form data, rate-limited; the marketing "Get started" points at it                                                                                                     | Framework                           | Open     |
-| 2   | Qualification data on the record | `customers` holds `stage`, `owner_id`, free-text `source`                                                          | Nowhere for participants, employees, pathway, modules, users. A `details jsonb` column and a product-defined field schema the lead form and the record render from                                                                                                          | Framework + product schema          | Open     |
-| 3   | Proposals and acceptance         | Nothing models money                                                                                               | Price book, `proposals` with line items, an email-bound token link (the invitation pattern), `get_proposal()` / `accept_proposal()`; acceptance creates the owner membership and marks the deal won; the record of who accepted, when and from where is the "signature"     | Framework; prices are product       | Open     |
-| 4   | Value and dates on the customer  | Stages `lead → qualified → trial → active`, `churned` / `lost`                                                     | `plan`, `annual_value`, `expected_close`, `renews_on`, outcome with reason. No "proposal sent" stage; OVI may not have a trial. A documented stage-rename path (migration + `stages.ts`)                                                                                    | Framework                           | Open     |
-| 5   | Onboarding playbook              | Tasks with due dates and assignees                                                                                 | Per-stage task templates created on the stage change, due relative to it, assigned to the owner ("CRM setup 2 days, access 5, onboarding 10")                                                                                                                               | Framework; the checklist is product | Open     |
-| 6   | Auditor access                   | Time-boxed memberships; roles `owner` / `admin` / `member`                                                         | A read-only `viewer` role, invitable and time-boxed; an access log (joins are on the timeline, sign-ins are not). Clause scoping is product                                                                                                                                 | Framework role + log; scope product | Open     |
-| 7   | Data sovereignty                 | Project in Sydney (`ap-southeast-2`)                                                                               | Auth emails go through Supabase's shared SMTP: use custom SMTP with an Australian provider before sending anything to customers. CI runs from GitHub's US runners: the E2E suite must only ever point at a test project. Model inference is OVI's concern, not this layer's | Ops                                 | Open     |
-| 8   | Multi-site enterprise providers  | Flat organisation → members                                                                                        | Sites under an organisation. Defer until a customer needs it                                                                                                                                                                                                                | Framework, later                    | Deferred |
-| 9   | Staff roles for a sales team     | `superadmin` / `admin` / `support`                                                                                 | None: `admin` is the sales role, `support` logs and reads (consultants)                                                                                                                                                                                                     | —                                   | Fine     |
-| 10  | Reporting                        | Counts per stage; your tasks; latest activity                                                                      | Forecast and ARR need #4 first                                                                                                                                                                                                                                              | Framework                           | After 4  |
+| #   | Need                             | Today                                                                                                                                      | Gap                                                                                                                                                                                                                                                                         | Where                               | Status          |
+| --- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | --------------- |
+| 1   | Inbound lead capture             | Leads are entered by staff (`create_lead()`, staff-only) or arrive via self-serve sign-up, which starts at `trial`                         | No anonymous door. An anon-callable RPC or Edge Function creating the organisation as a lead with the form data, rate-limited; the marketing "Get started" points at it                                                                                                     | Framework                           | Open            |
+| 2   | Qualification data on the record | `customers.details jsonb` holds the product's fields, defined in `src/config/customer-fields.ts`, on the record page and the new-lead form | OVI sets its own list (below)                                                                                                                                                                                                                                               | Framework + product schema          | Done 2026-09-18 |
+| 3   | Proposals and acceptance         | Nothing models money                                                                                                                       | Price book, `proposals` with line items, an email-bound token link (the invitation pattern), `get_proposal()` / `accept_proposal()`; acceptance creates the owner membership and marks the deal won; the record of who accepted, when and from where is the "signature"     | Framework; prices are product       | Open            |
+| 4   | Value and dates on the customer  | Stages `lead → qualified → trial → active`, `churned` / `lost`                                                                             | `plan`, `annual_value`, `expected_close`, `renews_on`, outcome with reason. No "proposal sent" stage; OVI may not have a trial. A documented stage-rename path (migration + `stages.ts`)                                                                                    | Framework                           | Open            |
+| 5   | Onboarding playbook              | Tasks with due dates and assignees                                                                                                         | Per-stage task templates created on the stage change, due relative to it, assigned to the owner ("CRM setup 2 days, access 5, onboarding 10")                                                                                                                               | Framework; the checklist is product | Open            |
+| 6   | Auditor access                   | Time-boxed memberships; roles `owner` / `admin` / `member`                                                                                 | A read-only `viewer` role, invitable and time-boxed; an access log (joins are on the timeline, sign-ins are not). Clause scoping is product                                                                                                                                 | Framework role + log; scope product | Open            |
+| 7   | Data sovereignty                 | Project in Sydney (`ap-southeast-2`)                                                                                                       | Auth emails go through Supabase's shared SMTP: use custom SMTP with an Australian provider before sending anything to customers. CI runs from GitHub's US runners: the E2E suite must only ever point at a test project. Model inference is OVI's concern, not this layer's | Ops                                 | Open            |
+| 8   | Multi-site enterprise providers  | Flat organisation → members                                                                                                                | Sites under an organisation. Defer until a customer needs it                                                                                                                                                                                                                | Framework, later                    | Deferred        |
+| 9   | Staff roles for a sales team     | `superadmin` / `admin` / `support`                                                                                                         | None: `admin` is the sales role, `support` logs and reads (consultants)                                                                                                                                                                                                     | —                                   | Fine            |
+| 10  | Reporting                        | Counts per stage; your tasks; latest activity                                                                                              | Forecast and ARR need #4 first                                                                                                                                                                                                                                              | Framework                           | After 4         |
 
 The [roadmap](../roadmap.md) orders this work.
+
+## OVI's customer fields
+
+What `src/config/customer-fields.ts` becomes for OVI — the inputs the lead form asks for and a
+quote is built from:
+
+```ts
+export const CUSTOMER_FIELDS: readonly CustomerField[] = [
+  { key: 'participants', label: 'Participants', type: 'number', min: 0 },
+  { key: 'employees', label: 'Employees', type: 'number', min: 0 },
+  {
+    key: 'pathway',
+    label: 'Pathway',
+    type: 'select',
+    options: [
+      { value: 'verification', label: 'Verification' },
+      { value: 'certification', label: 'Certification' },
+    ],
+  },
+  {
+    key: 'modules',
+    label: 'Modules',
+    type: 'multiselect',
+    options: [
+      { value: 'core', label: 'Core' },
+      { value: 'module-1', label: 'Module 1' },
+      { value: 'module-2a', label: 'Module 2A' },
+      { value: 'module-5', label: 'Module 5' },
+    ],
+  },
+  { key: 'users', label: 'Users', type: 'number', min: 1, help: 'Seats for OVI Frontline.' },
+  { key: 'multi_site', label: 'More than one site', type: 'boolean' },
+]
+```
+
+The tier (Verification, Small, Medium, Enterprise) is not a field: it follows from participants
+and pathway, and belongs with the price book (gap #3).
