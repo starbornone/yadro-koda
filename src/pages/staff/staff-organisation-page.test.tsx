@@ -79,6 +79,15 @@ const customer: Customer = {
   stage: 'lead',
   owner_id: 'user-2',
   source: 'Website',
+  // The configured fields, plus a key no field names any more.
+  details: {
+    industry: 'Disability services',
+    size: 'small',
+    seats: 12,
+    interests: ['core'],
+    budget_confirmed: true,
+    legacy_region: 'NSW',
+  },
   updated_at: '2026-01-02T00:00:00Z',
   owner: { id: 'user-2', display_name: 'Linus', email: null },
 }
@@ -215,6 +224,14 @@ describe('StaffOrganisationPage', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Acme' })).toBeInTheDocument()
     // Owner appears in the facts and again in the read-only pipeline summary.
     expect(screen.getAllByText('Linus', { selector: 'dd' })).toHaveLength(2)
+    // Details, read-only, each field's value as its label reads.
+    const details = within(screen.getByRole('region', { name: 'Details' }))
+    expect(details.getByText('Industry').nextSibling).toHaveTextContent('Disability services')
+    expect(details.getByText('Size').nextSibling).toHaveTextContent('2–10 people')
+    expect(details.getByText('Expected users').nextSibling).toHaveTextContent('12')
+    expect(details.getByText('Interested in').nextSibling).toHaveTextContent('Core')
+    expect(details.getByText('Budget confirmed').nextSibling).toHaveTextContent('Yes')
+    expect(details.queryByText('NSW')).not.toBeInTheDocument()
 
     // Contacts, with the primary one marked. (Names also appear as options in the activity form.)
     const contactsTable = within(screen.getByRole('region', { name: 'Contacts' }))
@@ -267,7 +284,11 @@ describe('StaffOrganisationPage', () => {
 
     await user.selectOptions(await screen.findByLabelText('Stage'), 'qualified')
     await user.selectOptions(screen.getByLabelText('Owner'), 'user-1')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(
+      within(screen.getByRole('region', { name: 'Pipeline' })).getByRole('button', {
+        name: 'Save',
+      }),
+    )
 
     expect(crm.updateCustomer).toHaveBeenCalledWith('org-1', {
       stage: 'qualified',
@@ -279,6 +300,39 @@ describe('StaffOrganisationPage', () => {
     // Admins may remove anyone's contact or task.
     expect(screen.getByRole('button', { name: 'Remove Grace Hopper' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Remove task Send proposal' })).toBeInTheDocument()
+  })
+
+  it('lets admins edit the details, keeping what no field names any more', async () => {
+    const user = userEvent.setup()
+    renderPage('admin')
+    const details = within(await screen.findByRole('region', { name: 'Details' }))
+    const save = details.getByRole('button', { name: 'Save' })
+    expect(save).toBeDisabled()
+
+    await user.clear(details.getByLabelText('Industry'))
+    await user.type(details.getByLabelText('Industry'), ' Aged care ')
+    await user.selectOptions(details.getByLabelText('Size'), 'medium')
+    await user.click(details.getByLabelText('Reporting'))
+    await user.click(details.getByLabelText('Budget confirmed'))
+    await user.clear(details.getByLabelText('Expected users'))
+    await user.type(details.getByLabelText('Expected users'), '0')
+    await user.click(save)
+
+    // Below the field's minimum: the input is invalid and nothing is saved.
+    expect(details.getByLabelText('Expected users')).toBeInvalid()
+    expect(crm.updateCustomer).not.toHaveBeenCalled()
+
+    await user.clear(details.getByLabelText('Expected users'))
+    await user.click(save)
+    expect(crm.updateCustomer).toHaveBeenCalledWith('org-1', {
+      details: {
+        legacy_region: 'NSW',
+        industry: 'Aged care',
+        size: 'medium',
+        interests: ['core', 'reporting'],
+      },
+    })
+    expect(await details.findByRole('status')).toHaveTextContent('Saved.')
   })
 
   it('adds a contact', async () => {

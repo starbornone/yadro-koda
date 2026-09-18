@@ -7,6 +7,7 @@ import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@/componen
 import { Input } from '@/components/ui/input'
 import { ActivitySection } from '@/features/crm/components/activity-section'
 import { ContactsSection } from '@/features/crm/components/contacts-section'
+import { DetailsSection } from '@/features/crm/components/details-section'
 import { PipelineForm } from '@/features/crm/components/pipeline-form'
 import { StageBadge } from '@/features/crm/components/stage-badge'
 import { TasksSection } from '@/features/crm/components/tasks-section'
@@ -19,8 +20,9 @@ import { formatDate } from '@/lib/format'
 import { createInvitation, revokeInvitation } from '@/lib/supabase/invitations'
 
 /**
- * The customer record: one organisation as staff see it — where it sits in the pipeline, who
- * to talk to, what has happened, what is next, who its members are and who has been invited.
+ * The customer record: one organisation as staff see it — where it sits in the pipeline, what
+ * the product records about it, who to talk to, what has happened, what is next, who its
+ * members are and who has been invited.
  */
 export const StaffOrganisationPage = () => {
   const {
@@ -80,6 +82,8 @@ export const StaffOrganisationPage = () => {
           </h2>
           <PipelineForm customer={customer} staff={staff} canManage={canManageCustomers} />
         </section>
+
+        <DetailsSection customer={customer} canManage={canManageCustomers} />
 
         <ContactsSection
           orgId={organisation.id}
