@@ -92,6 +92,7 @@ const crm = vi.hoisted(() => ({
   getCustomerRecord: vi.fn(),
   getStageCounts: vi.fn(),
   listMyOpenTasks: vi.fn(),
+  listRecentActivities: vi.fn(),
 }))
 vi.mock('@/lib/supabase/crm', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/supabase/crm')>()),
@@ -139,6 +140,7 @@ beforeEach(() => {
   crm.getCustomerRecord.mockReset().mockResolvedValue(null)
   crm.getStageCounts.mockReset().mockResolvedValue({})
   crm.listMyOpenTasks.mockReset().mockResolvedValue([])
+  crm.listRecentActivities.mockReset().mockResolvedValue([])
 })
 
 describe('public site', () => {
@@ -497,13 +499,14 @@ describe('staff', () => {
     expect(platform.listPlatformInvitations).not.toHaveBeenCalled()
   })
 
-  it('loads the pipeline and the viewer’s tasks for the overview', async () => {
+  it('loads the pipeline, the viewer’s tasks and the latest activity for the overview', async () => {
     platform.getMyPlatformRole.mockResolvedValue('support')
     renderAt('/staff')
 
     expect(await screen.findByText('staff overview')).toBeInTheDocument()
     expect(crm.getStageCounts).toHaveBeenCalled()
     expect(crm.listMyOpenTasks).toHaveBeenCalledWith('user-1')
+    expect(crm.listRecentActivities).toHaveBeenCalled()
   })
 
   it('lets admins enter a new organisation but sends support back to the list', async () => {

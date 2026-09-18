@@ -18,6 +18,7 @@ import {
   getStageCounts,
   isCustomerStage,
   listMyOpenTasks,
+  listRecentActivities,
   type CustomerStage,
 } from '@/lib/supabase/crm'
 import { getInvitation, listInvitations } from '@/lib/supabase/invitations'
@@ -349,12 +350,13 @@ const staffOverviewRoute = createRoute({
   path: '/staff',
   loader: async ({ context, parentMatchPromise }) => {
     await guardedBy(parentMatchPromise)
-    const [overview, stages, tasks] = await Promise.all([
+    const [overview, stages, tasks, activities] = await Promise.all([
       getPlatformOverview(),
       getStageCounts(),
       listMyOpenTasks(context.user.id),
+      listRecentActivities(),
     ])
-    return { ...overview, stages, tasks }
+    return { ...overview, stages, tasks, activities }
   },
   head: () => ({ meta: [{ title: 'Staff' }] }),
   component: lazyRouteComponent(
