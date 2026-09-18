@@ -31,12 +31,17 @@ describe('StaffNewOrganisationPage', () => {
     await user.type(await screen.findByLabelText('Organisation name'), 'Initech Pty Ltd')
     expect(screen.getByLabelText('URL name')).toHaveValue('initech-pty-ltd')
     await user.type(screen.getByLabelText('Source'), 'Referral')
+    // The product's fields, filled in as far as they are known.
+    await user.selectOptions(screen.getByLabelText('Size'), 'medium')
+    await user.type(screen.getByLabelText('Expected users'), '25')
+    await user.click(screen.getByLabelText('Reporting'))
     await user.click(screen.getByRole('button', { name: 'Create lead' }))
 
     expect(createLead).toHaveBeenCalledWith({
       name: 'Initech Pty Ltd',
       slug: 'initech-pty-ltd',
       source: 'Referral',
+      details: { size: 'medium', seats: 25, interests: ['reporting'] },
     })
     await waitFor(() => expect(router.state.location.pathname).toBe('/staff/organisations/org-9'))
   })

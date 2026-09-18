@@ -4,12 +4,26 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { CUSTOMER_FIELDS } from '@/config/customer-fields'
+import { DetailsFields } from '@/features/crm/components/details-fields'
 import { useCreateLead } from '@/features/crm/hooks/use-create-lead'
 
 /** Staff enter an organisation that has no users yet. It starts in the pipeline as a lead. */
 export const StaffNewOrganisationPage = () => {
-  const { name, slug, source, loading, error, setName, setSlug, setSource, handleSubmit } =
-    useCreateLead()
+  const {
+    name,
+    slug,
+    source,
+    details,
+    detailErrors,
+    loading,
+    error,
+    setName,
+    setSlug,
+    setSource,
+    setDetail,
+    handleSubmit,
+  } = useCreateLead()
 
   return (
     <>
@@ -71,6 +85,15 @@ export const StaffNewOrganisationPage = () => {
               />
               <FieldDescription>Where this lead came from. Optional.</FieldDescription>
             </Field>
+
+            <DetailsFields
+              fields={CUSTOMER_FIELDS}
+              values={details}
+              errors={detailErrors}
+              onChange={setDetail}
+              idPrefix="lead"
+              disabled={loading}
+            />
 
             {error ? (
               <Alert variant="destructive">
