@@ -11,6 +11,7 @@ import { createAppRouter } from './router'
 vi.mock('@/components/layout/app-shell', () => ({ AppShell: () => <Outlet /> }))
 vi.mock('@/components/layout/public-layout', () => ({ PublicLayout: () => <Outlet /> }))
 vi.mock('./pages/home-page', () => ({ HomePage: () => <div>home page</div> }))
+vi.mock('./pages/get-started-page', () => ({ GetStartedPage: () => <div>get started</div> }))
 vi.mock('./pages/auth-page', () => ({
   AuthPage: () => <div>auth page</div>,
   SignUpPage: () => <div>sign-up page</div>,
@@ -158,6 +159,18 @@ describe('public site', () => {
 
     expect(await screen.findByText('home page')).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/')
+    expect(getMyProfile).not.toHaveBeenCalled()
+  })
+
+  it('has the lead form at /get-started, for anyone', async () => {
+    fakeStore.set(signedOut)
+    renderAt('/get-started')
+    expect(await screen.findByText('get started')).toBeInTheDocument()
+
+    cleanup()
+    fakeStore.set(signedIn)
+    renderAt('/get-started')
+    expect(await screen.findByText('get started')).toBeInTheDocument()
     expect(getMyProfile).not.toHaveBeenCalled()
   })
 })

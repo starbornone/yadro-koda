@@ -88,6 +88,15 @@ const homeRoute = createRoute({
   component: HomePage,
 })
 
+// The lead form: no session needed, so it sits with the marketing site. Its chunk carries the
+// product's fields and the form; the home page stays as light as before.
+const getStartedRoute = createRoute({
+  getParentRoute: () => publicRoute,
+  path: '/get-started',
+  head: () => ({ meta: [{ title: homeContent.getStarted.meta.title }] }),
+  component: lazyRouteComponent(() => import('./pages/get-started-page'), 'GetStartedPage'),
+})
+
 // ---------------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------------
@@ -453,7 +462,7 @@ const staffProfileRoute = createRoute({
 })
 
 const routeTree = rootRoute.addChildren([
-  publicRoute.addChildren([homeRoute]),
+  publicRoute.addChildren([homeRoute, getStartedRoute]),
   loginRoute,
   signUpRoute,
   resetPasswordRoute,
