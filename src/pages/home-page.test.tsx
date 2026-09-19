@@ -69,19 +69,17 @@ describe('HomePage', () => {
     expect(screen.getByText(`© ${new Date().getFullYear()} Јадро Кода`)).toBeInTheDocument()
   })
 
-  it('points signed-out visitors at sign-up and login', async () => {
+  it('points signed-out visitors at the lead form and login', async () => {
     renderHome()
 
     await screen.findByRole('heading', { level: 1 })
-    expect(screen.getAllByRole('link', { name: /get started/i })[0]).toHaveAttribute(
-      'href',
-      '/signup',
-    )
+    // Header, hero and the closing call to action all lead the same way.
+    const getStarted = screen.getAllByRole('link', { name: homeContent.hero.primaryCta })
+    expect(getStarted).toHaveLength(3)
+    for (const link of getStarted) {
+      expect(link).toHaveAttribute('href', homeContent.getStartedPath)
+    }
     expect(screen.getAllByRole('link', { name: 'Sign in' })[0]).toHaveAttribute('href', '/login')
-    expect(screen.getByRole('link', { name: homeContent.cta.button })).toHaveAttribute(
-      'href',
-      '/signup',
-    )
     expect(screen.queryByRole('link', { name: /dashboard/i })).not.toBeInTheDocument()
   })
 

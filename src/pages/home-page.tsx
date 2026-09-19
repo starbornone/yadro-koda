@@ -33,7 +33,7 @@ const Hero = ({ signedIn }: { signedIn: boolean }) => {
         ) : (
           <>
             <Button asChild size="lg">
-              <Link to="/signup">
+              <Link to={homeContent.getStartedPath}>
                 {hero.primaryCta}
                 <ArrowRightIcon data-icon="inline-end" />
               </Link>
@@ -83,7 +83,7 @@ const CallToAction = ({ signedIn }: { signedIn: boolean }) => {
         <h2 className="text-3xl font-semibold tracking-tight">{cta.heading}</h2>
         <p className="text-muted-foreground">{cta.subhead}</p>
         <Button asChild size="lg">
-          <Link to={signedIn ? '/app' : '/signup'}>
+          <Link to={signedIn ? '/app' : homeContent.getStartedPath}>
             {signedIn ? cta.signedInButton : cta.button}
           </Link>
         </Button>
