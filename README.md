@@ -70,7 +70,7 @@ is for ([OVI](docs/products/ovi.md), the first), what they need from it, and the
 ```
 src/
   main.tsx              # React root; starts the theme store, mounts the router
-  router.tsx            # Route tree: `_public` (marketing), /login, /signup, /reset-password,
+  router.tsx            # Route tree: `_public` (marketing, /get-started), /login, /signup, /reset-password,
                         # /invite, and `_authenticated` (guards + profile loader). Everything
                         # past the marketing home is a lazy chunk.
   App.tsx               # Root layout (renders <Outlet />)
@@ -90,7 +90,7 @@ src/
     staff/              # Staff team and organisation page hooks
     crm/                # Customer record sections (pipeline, contacts, activity, tasks), stages
     accounts/           # Account chooser hook
-    marketing/          # Placeholder copy for the public site (content.ts)
+    marketing/          # Placeholder copy for the public site (content.ts) and the lead form hook
     profile/            # Profile, change-password and account sections + page hook
   pages/                # Route components (staff/ for the staff area)
   components/
@@ -122,6 +122,7 @@ Path alias: `@/` → `src/`.
 | Path                     | Who                  | What                                                            |
 | ------------------------ | -------------------- | --------------------------------------------------------------- |
 | `/`                      | everyone             | Marketing home; signed-in visitors get a Dashboard CTA          |
+| `/get-started`           | everyone             | The lead form: who they are and the product's fields → a lead   |
 | `/login`                 | signed out           | Sign in (`?redirect=` honoured); signed in → /accounts          |
 | `/signup`                | signed out           | Create account; signed in → /accounts                           |
 | `/reset-password`        | from the email link  | Set a new password, or request a fresh link                     |
@@ -244,13 +245,26 @@ staff know about it lives in tables tenants cannot read (`supabase/schemas/30_cr
   organisation. `user_id` links a contact to their account: set by trigger when someone joins
   the organisation with the same email (typically by accepting an invitation), never by hand.
 - `activities` — the timeline: notes, calls, emails, meetings, and what the database records by
-  itself: stage changes, and people joining ("Created the organisation", "Accepted an
-  invitation as admin") — the moment a lead becomes a tenant, in the record.
+  itself: stage changes, people joining ("Created the organisation", "Accepted an invitation as
+  admin") — the moment a lead becomes a tenant, in the record — and enquiries from the website.
 - `tasks` — follow-ups with a due date and a staff assignee; the overview lists yours.
 
 The overview's **Latest** section is the newest entries from every timeline in one list — a join
 here, a stage change there, a colleague's call — each linking to its customer record: the
 morning read.
+
+**Leads come in three ways.** Staff enter one (`/staff/organisations/new`, `create_lead()`); a
+person signs up and creates their organisation themselves (it starts at `trial`); or a visitor
+fills in the **lead form** at `/get-started` — the website's "Get started" leads there
+(`homeContent.getStartedPath`; a self-serve product points it at `/signup` instead). The form
+asks who they are, the product's customer fields and a message, and calls `submit_enquiry()`,
+the one RPC open to `anon`: it enters the organisation as a `lead` sourced from the website,
+makes the person its primary contact, and puts the enquiry on the timeline as "Website ·
+Enquiry from …". Nothing comes back but success. Three guards, two of them silent: a honeypot
+field people never see (a bot that fills it in is thanked and gets no lead), one enquiry per
+email address a day (a double-click makes one lead), and a loud limit of twenty an hour from
+one IP address, counted in the private `enquiry_attempts` table from the address the gateway
+reports.
 
 Every staff tier reads all of it and logs activity; moving the pipeline (stage, owner, source,
 new leads) needs `platform:manage-customers` — superadmin and admin — enforced in SQL by

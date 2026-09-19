@@ -12,35 +12,35 @@ it sits on. When something ships it moves to _Done_ with its date.
 
 ## Next
 
-1. **Inbound lead capture** — an anonymous door: an RPC or Edge Function that creates the
-   organisation as a `lead` with the form data and a `source`, rate-limited and honeypotted;
-   the marketing site's "Get started" leads there and asks the product's customer fields.
-   Browser test from the public page to the staff record. _OVI gap #1._
-2. **Value and dates** — `plan`, `annual_value`, `expected_close`, `renews_on`, and an outcome
+1. **Value and dates** — `plan`, `annual_value`, `expected_close`, `renews_on`, and an outcome
    with a reason on `customers`; the overview shows forecast and renewals due. Document the
    stage-rename path (migration + `stages.ts`) so a product can replace `trial` with
    "proposal sent". _OVI gap #4, unlocks #10._
-3. **Proposals** — a price book, `proposals` with line items and totals, an email-bound token
+2. **Proposals** — a price book, `proposals` with line items and totals, an email-bound token
    link on the invitation pattern, `get_proposal()` for the signed-out preview and
    `accept_proposal()` from a session with that email. Acceptance creates the owner membership,
    moves the stage to won and records who, when and from where. _OVI gap #3._
-4. **Onboarding playbooks** — per-stage task templates created by trigger on the stage change,
+3. **Onboarding playbooks** — per-stage task templates created by trigger on the stage change,
    due relative to it, assigned to the customer's owner. _OVI gap #5._
-5. **Viewer role and access log** — a read-only `viewer` in `org_role`, invitable and
+4. **Viewer role and access log** — a read-only `viewer` in `org_role`, invitable and
    time-boxed like any member; sign-ins to an organisation recorded so an auditor's visit is
    logged. _OVI gap #6._
-6. **Invitation email delivery** — a database webhook on insert → Edge Function → provider, with
+5. **Invitation email delivery** — a database webhook on insert → Edge Function → provider, with
    custom SMTP on an Australian provider so nothing customer-facing leaves the country. Until
    then invitations stay hand-off links. _OVI gap #7._
-7. **Expiry housekeeping** — a nightly `pg_cron` purge of invitations past their link expiry
-   and memberships past their access end. Correctness is already fine; this keeps lists honest.
-8. **Dashboard content** — `/app` is the product's slot; leave the placeholder until OVI's
+6. **Expiry housekeeping** — a nightly `pg_cron` purge of invitations past their link expiry,
+   memberships past their access end, and `enquiry_attempts` older than a day. Correctness is
+   already fine; this keeps tables honest.
+7. **Dashboard content** — `/app` is the product's slot; leave the placeholder until OVI's
    compliance dashboard replaces it.
-9. **Sites under an organisation** — for multi-site enterprise providers. Deferred until a
+8. **Sites under an organisation** — for multi-site enterprise providers. Deferred until a
    customer needs it. _OVI gap #8._
 
 ## Done
 
+- 2026-09-18 — **Inbound lead capture**: the `/get-started` form and `submit_enquiry()`, the one
+  RPC open to anonymous callers — a lead sourced from the website with its contact and an
+  "Enquiry" entry; honeypot, one a day per email, twenty an hour per IP. _OVI gap #1._
 - 2026-09-18 — **Customer details**: `customers.details jsonb` and a product-defined field
   schema (`src/config/customer-fields.ts`) rendered on the record page and the new-lead form;
   `create_lead()` takes the details. _OVI gap #2._
