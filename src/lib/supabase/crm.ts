@@ -71,9 +71,35 @@ export type Customer = {
   owner_id: string | null
   source: string | null
   details: CustomerDetails
+  /** Which of the product's plans; free text until a price book names them. */
+  plan: string | null
+  /** What the customer is worth a year, in the site's currency. */
+  annual_value: number | null
+  /** When the deal should close, while it is open (`YYYY-MM-DD`). */
+  expected_close: string | null
+  /** When the subscription renews, once it is won (`YYYY-MM-DD`). */
+  renews_on: string | null
+  /** Why it was lost or churned. */
+  outcome_reason: string | null
+  /** When the current stage was entered. Kept by the database. */
+  stage_changed_at: string
+  /** When the customer first became active. Kept by the database. */
+  won_at: string | null
   updated_at: string
   /** The account manager's profile, when there is one. */
   owner: PublicProfile | null
+}
+
+/** One stage of the pipeline: how many organisations, and what they are worth a year. */
+export type StageSummary = { count: number; value: number }
+
+/** An active customer whose renewal is coming up (or has slipped past). */
+export type Renewal = {
+  org_id: string
+  plan: string | null
+  annual_value: number | null
+  renews_on: string
+  organisation: Pick<Organisation, 'id' | 'name'>
 }
 
 export type Contact = {
@@ -133,7 +159,7 @@ type StaffEmbed = { user_id: string; profile: PublicProfile } | null
 const profileOf = (staff: StaffEmbed | undefined) => staff?.profile ?? null
 
 const CUSTOMER_SELECT =
-  `org_id, stage, owner_id, source, details, updated_at, owner:platform_members(${STAFF_EMBED})` as const
+  `org_id, stage, owner_id, source, details, plan, annual_value, expected_close, renews_on, outcome_reason, stage_changed_at, won_at, updated_at, owner:platform_members(${STAFF_EMBED})` as const
 const CONTACT_SELECT =
   'id, org_id, name, email, phone, title, is_primary, user_id, created_by, created_at'
 const ACTIVITY_SELECT =
@@ -225,22 +251,51 @@ export const getCustomerRecord = async (orgId: string): Promise<CustomerRecord |
   return customer ? { customer, contacts, activities, tasks } : null
 }
 
-/** How many organisations sit at each stage. Every stage is present, zero when empty. */
-export const getStageCounts = async (): Promise<Record<CustomerStage, number>> => {
-  const { data, error } = await supabase.from('customer_stage_counts').select('stage, count')
+/**
+ * How many organisations sit at each stage and what they are worth a year. Every stage is
+ * present, zero when empty.
+ */
+export const getStageSummary = async (): Promise<Record<CustomerStage, StageSummary>> => {
+  const { data, error } = await supabase
+    .from('customer_stage_summary')
+    .select('stage, count, value')
 
   if (error) {
     throw error
   }
 
-  const counts = Object.fromEntries(CUSTOMER_STAGES.map((stage) => [stage, 0])) as Record<
-    CustomerStage,
-    number
-  >
-  for (const row of (data ?? []) as Array<{ stage: CustomerStage; count: number }>) {
-    counts[row.stage] = row.count
+  const summary = Object.fromEntries(
+    CUSTOMER_STAGES.map((stage) => [stage, { count: 0, value: 0 }]),
+  ) as Record<CustomerStage, StageSummary>
+  for (const row of data ?? []) {
+    if (isCustomerStage(row.stage)) {
+      summary[row.stage] = { count: row.count ?? 0, value: Number(row.value ?? 0) }
+    }
   }
-  return counts
+  return summary
+}
+
+/**
+ * Active customers renewing within the next `withinDays` days, soonest first — including any
+ * whose date has already passed without the record being updated.
+ */
+export const listUpcomingRenewals = async (withinDays = 90): Promise<Renewal[]> => {
+  const horizon = new Date()
+  horizon.setDate(horizon.getDate() + withinDays)
+  const { data, error } = await supabase
+    .from('customers')
+    .select('org_id, plan, annual_value, renews_on, organisation:organisations(id, name)')
+    .eq('stage', 'active')
+    .not('renews_on', 'is', null)
+    .lte('renews_on', horizon.toISOString().slice(0, 10))
+    .order('renews_on', { ascending: true })
+    .limit(20)
+
+  if (error) {
+    throw error
+  }
+
+  return data.filter((row): row is typeof row & { renews_on: string } => row.renews_on !== null)
 }
 
 /** The newest entries on every customer's timeline, most recent first. */
@@ -279,13 +334,30 @@ export const listMyOpenTasks = async (userId: string): Promise<TaskWithOrganisat
 // Writes. Each returns nothing; callers `router.invalidate()` so the loaders re-read.
 // ---------------------------------------------------------------------------
 
-export type CustomerPatch = Partial<Pick<Customer, 'stage' | 'owner_id' | 'source' | 'details'>>
+export type CustomerPatch = Partial<
+  Pick<
+    Customer,
+    | 'stage'
+    | 'owner_id'
+    | 'source'
+    | 'details'
+    | 'plan'
+    | 'annual_value'
+    | 'expected_close'
+    | 'renews_on'
+    | 'outcome_reason'
+  >
+>
+
+// Free text and dates arrive from inputs, where "nothing" is an empty string.
+const TEXT_FIELDS = ['source', 'plan', 'outcome_reason', 'expected_close', 'renews_on'] as const
 
 export const updateCustomer = async (orgId: string, patch: CustomerPatch): Promise<void> => {
-  const { error } = await supabase
-    .from('customers')
-    .update({ ...patch, ...(patch.source !== undefined && { source: blankToNull(patch.source) }) })
-    .eq('org_id', orgId)
+  const clean = { ...patch }
+  for (const field of TEXT_FIELDS) {
+    if (clean[field] !== undefined) clean[field] = blankToNull(clean[field])
+  }
+  const { error } = await supabase.from('customers').update(clean).eq('org_id', orgId)
 
   if (error) {
     throw error

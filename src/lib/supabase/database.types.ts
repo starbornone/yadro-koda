@@ -127,31 +127,52 @@ export type Database = {
       }
       customers: {
         Row: {
+          annual_value: number | null
           created_at: string
           details: NonNullable<Json>
+          expected_close: string | null
           org_id: string
+          outcome_reason: string | null
           owner_id: string | null
+          plan: string | null
+          renews_on: string | null
           source: string | null
           stage: Database['public']['Enums']['customer_stage']
+          stage_changed_at: string
           updated_at: string
+          won_at: string | null
         }
         Insert: {
+          annual_value?: number | null
           created_at?: string
           details?: NonNullable<Json>
+          expected_close?: string | null
           org_id: string
+          outcome_reason?: string | null
           owner_id?: string | null
+          plan?: string | null
+          renews_on?: string | null
           source?: string | null
           stage: Database['public']['Enums']['customer_stage']
+          stage_changed_at?: string
           updated_at?: string
+          won_at?: string | null
         }
         Update: {
+          annual_value?: number | null
           created_at?: string
           details?: NonNullable<Json>
+          expected_close?: string | null
           org_id?: string
+          outcome_reason?: string | null
           owner_id?: string | null
+          plan?: string | null
+          renews_on?: string | null
           source?: string | null
           stage?: Database['public']['Enums']['customer_stage']
+          stage_changed_at?: string
           updated_at?: string
+          won_at?: string | null
         }
         Relationships: [
           {
@@ -525,10 +546,11 @@ export type Database = {
       }
     }
     Views: {
-      customer_stage_counts: {
+      customer_stage_summary: {
         Row: {
           count: number | null
           stage: Database['public']['Enums']['customer_stage'] | null
+          value: number | null
         }
         Relationships: []
       }

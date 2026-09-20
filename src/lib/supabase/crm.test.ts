@@ -5,11 +5,12 @@ import {
   addTask,
   createLead,
   getCustomerRecord,
-  getStageCounts,
+  getStageSummary,
   isCustomerStage,
   listMyOpenTasks,
   parseDetails,
   listRecentActivities,
+  listUpcomingRenewals,
   setTaskCompleted,
   updateCustomer,
 } from './crm'
@@ -24,6 +25,8 @@ const query = vi.hoisted(() => {
     is: vi.fn(),
     order: vi.fn(),
     limit: vi.fn(),
+    not: vi.fn(),
+    lte: vi.fn(),
     maybeSingle: vi.fn(),
   }
   return { builder, from: vi.fn((table: string) => (table ? builder : builder)), rpc: vi.fn() }
@@ -31,7 +34,18 @@ const query = vi.hoisted(() => {
 
 vi.mock('@/lib/supabase/supabase', () => ({ supabase: { from: query.from, rpc: query.rpc } }))
 
-const chainable = ['select', 'insert', 'update', 'delete', 'eq', 'is', 'order', 'limit'] as const
+const chainable = [
+  'select',
+  'insert',
+  'update',
+  'delete',
+  'eq',
+  'is',
+  'order',
+  'limit',
+  'not',
+  'lte',
+] as const
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -82,6 +96,13 @@ describe('getCustomerRecord', () => {
         owner_id: 'user-2',
         source: null,
         details: { industry: 'Care', nested: { dropped: true } },
+        plan: 'Small',
+        annual_value: 5000,
+        expected_close: null,
+        renews_on: '2027-01-01',
+        outcome_reason: null,
+        stage_changed_at: '2026-01-01T00:00:00Z',
+        won_at: null,
         updated_at: '',
         owner: { user_id: 'user-2', profile: linus },
       },
@@ -112,6 +133,13 @@ describe('getCustomerRecord', () => {
         owner_id: 'user-2',
         source: null,
         details: { industry: 'Care' },
+        plan: 'Small',
+        annual_value: 5000,
+        expected_close: null,
+        renews_on: '2027-01-01',
+        outcome_reason: null,
+        stage_changed_at: '2026-01-01T00:00:00Z',
+        won_at: null,
         updated_at: '',
         owner: linus,
       },
@@ -135,25 +163,50 @@ describe('getCustomerRecord', () => {
   })
 })
 
-describe('getStageCounts', () => {
-  it('fills every stage, zero when absent', async () => {
+describe('getStageSummary', () => {
+  it('fills every stage with count and value, zero when absent', async () => {
     query.builder.select.mockResolvedValue({
       data: [
-        { stage: 'lead', count: 3 },
-        { stage: 'active', count: 1 },
+        { stage: 'lead', count: 3, value: 12000 },
+        { stage: 'active', count: 1, value: 5000 },
+        { stage: 'nonsense', count: 9, value: 9 },
       ],
       error: null,
     })
 
-    await expect(getStageCounts()).resolves.toEqual({
-      lead: 3,
-      qualified: 0,
-      trial: 0,
-      active: 1,
-      churned: 0,
-      lost: 0,
+    await expect(getStageSummary()).resolves.toEqual({
+      lead: { count: 3, value: 12000 },
+      qualified: { count: 0, value: 0 },
+      trial: { count: 0, value: 0 },
+      active: { count: 1, value: 5000 },
+      churned: { count: 0, value: 0 },
+      lost: { count: 0, value: 0 },
     })
-    expect(query.from).toHaveBeenCalledWith('customer_stage_counts')
+    expect(query.from).toHaveBeenCalledWith('customer_stage_summary')
+  })
+})
+
+describe('listUpcomingRenewals', () => {
+  it('asks for active customers renewing within the horizon, soonest first', async () => {
+    query.builder.limit.mockResolvedValueOnce({
+      data: [
+        { org_id: 'org-1', renews_on: '2026-10-01', organisation: { id: 'org-1', name: 'Acme' } },
+        { org_id: 'org-2', renews_on: null, organisation: { id: 'org-2', name: 'Globex' } },
+      ],
+      error: null,
+    })
+
+    const renewals = await listUpcomingRenewals(30)
+
+    expect(renewals.map((renewal) => renewal.org_id)).toEqual(['org-1'])
+    expect(query.builder.eq).toHaveBeenCalledWith('stage', 'active')
+    expect(query.builder.not).toHaveBeenCalledWith('renews_on', 'is', null)
+    const [column, horizon] = query.builder.lte.mock.calls[0] as [string, string]
+    expect(column).toBe('renews_on')
+    const expected = new Date()
+    expected.setDate(expected.getDate() + 30)
+    expect(horizon).toBe(expected.toISOString().slice(0, 10))
+    expect(query.builder.order).toHaveBeenCalledWith('renews_on', { ascending: true })
   })
 })
 
@@ -213,6 +266,21 @@ describe('writes', () => {
     })
     await updateCustomer('org-1', { details: { seats: 3 } })
     expect(query.builder.update).toHaveBeenLastCalledWith({ details: { seats: 3 } })
+    // The commercial facts: blank text and blank dates are nulls; a value stays a number.
+    await updateCustomer('org-1', {
+      plan: ' ',
+      annual_value: 5000,
+      expected_close: '',
+      renews_on: '2027-01-01',
+      outcome_reason: ' Too dear ',
+    })
+    expect(query.builder.update).toHaveBeenLastCalledWith({
+      plan: null,
+      annual_value: 5000,
+      expected_close: null,
+      renews_on: '2027-01-01',
+      outcome_reason: 'Too dear',
+    })
 
     await addContact('org-1', {
       name: ' Grace ',
