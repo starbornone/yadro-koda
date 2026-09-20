@@ -12,6 +12,11 @@ import { siteConfig } from '@/config/site'
 // with real messaging is a one-file change.
 
 export const homeContent = {
+  /**
+   * Where "get started" leads. `/get-started` asks the visitor about their organisation and
+   * enters it as a lead for staff to follow up; a self-serve product points this at `/signup`.
+   */
+  getStartedPath: '/get-started',
   meta: {
     title: `${siteConfig.title} — one calm workspace for your team's work`,
     description:
@@ -70,9 +75,19 @@ export const homeContent = {
   },
   cta: {
     heading: 'Ready to get organised?',
-    subhead: 'Create an account in under a minute. No credit card required.',
-    button: 'Create your account',
+    subhead: 'Tell us about your team and we will come back to you with a proposal.',
+    button: 'Get started',
     signedInButton: 'Open your dashboard',
+  },
+  getStarted: {
+    meta: { title: 'Get started' },
+    heading: 'Tell us about your organisation',
+    subhead: 'A few details and we will come back to you with a proposal. No account needed yet.',
+    submit: 'Send',
+    thanks: {
+      heading: 'Thanks — we will be in touch',
+      body: 'Someone from our team will reply to',
+    },
   },
   footer: {
     tagline: 'One calm workspace for your team.',

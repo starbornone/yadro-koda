@@ -170,6 +170,27 @@ export type Database = {
           },
         ]
       }
+      enquiry_attempts: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          ip_hash: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          ip_hash: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          ip_hash?: string
+        }
+        Relationships: []
+      }
       invitations: {
         Row: {
           accepted_at: string | null
@@ -604,9 +625,22 @@ export type Database = {
         Returns: Database['public']['Enums']['platform_role']
       }
       shares_org_with: { Args: { target_user: string }; Returns: boolean }
+      slug_from_name: { Args: { name: string }; Returns: string }
+      submit_enquiry: {
+        Args: {
+          contact_name: string
+          details?: Json
+          email: string
+          message?: string
+          organisation: string
+          phone?: string
+          website_url?: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
-      activity_kind: 'note' | 'call' | 'email' | 'meeting' | 'stage_change' | 'joined'
+      activity_kind: 'note' | 'call' | 'email' | 'meeting' | 'stage_change' | 'joined' | 'enquiry'
       customer_stage: 'lead' | 'qualified' | 'trial' | 'active' | 'churned' | 'lost'
       org_role: 'owner' | 'admin' | 'member'
       platform_role: 'superadmin' | 'admin' | 'support'
@@ -725,7 +759,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      activity_kind: ['note', 'call', 'email', 'meeting', 'stage_change', 'joined'],
+      activity_kind: ['note', 'call', 'email', 'meeting', 'stage_change', 'joined', 'enquiry'],
       customer_stage: ['lead', 'qualified', 'trial', 'active', 'churned', 'lost'],
       org_role: ['owner', 'admin', 'member'],
       platform_role: ['superadmin', 'admin', 'support'],
