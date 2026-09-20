@@ -10,8 +10,14 @@ export const CUSTOMER_STAGE_LABELS: Record<CustomerStage, string> = {
   lost: 'Lost',
 }
 
-/** Which stages count as a live relationship (for the pipeline summary). */
-export const OPEN_STAGES: readonly CustomerStage[] = ['lead', 'qualified', 'trial', 'active']
+/** The deals still in play: what the pipeline is worth is the value sitting in these. */
+export const PIPELINE_STAGES: readonly CustomerStage[] = ['lead', 'qualified', 'trial']
+
+/** Won: the customers paying today, whose value is recurring revenue. */
+export const WON_STAGE: CustomerStage = 'active'
+
+/** Over, one way or the other; the record keeps a reason. */
+export const CLOSED_STAGES: readonly CustomerStage[] = ['churned', 'lost']
 
 export const ACTIVITY_KIND_LABELS: Record<ActivityKind, string> = {
   note: 'Note',

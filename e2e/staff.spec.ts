@@ -73,6 +73,36 @@ test.describe('the staff area', () => {
     await expect(page).toHaveURL(`/staff/organisations/${org.id}`)
   })
 
+  test('a deal is priced and won, and shows up as revenue and a renewal', async ({ as }) => {
+    const page = await as(sam)
+    await page.goto(`/staff/organisations/${org.id}`)
+    const pipeline = page.getByRole('region', { name: 'Pipeline' })
+    await pipeline.getByLabel('Plan').fill('Small provider')
+    await pipeline.getByLabel(/Annual value/).fill('5000')
+    await pipeline.getByLabel('Stage').selectOption('active')
+    const renews = new Date()
+    renews.setDate(renews.getDate() + 30)
+    await pipeline.getByLabel('Renews on').fill(renews.toISOString().slice(0, 10))
+    await pipeline.getByRole('button', { name: 'Save' }).click()
+    await expect(pipeline.getByRole('status')).toHaveText('Saved.')
+
+    // The database stamped the win.
+    await page.reload()
+    await expect(pipeline.getByText(/Active since .*; won /)).toBeVisible()
+
+    await page.goto('/staff')
+    await expect(
+      page.locator('[data-slot=card]').filter({ hasText: 'Annual recurring revenue' }),
+    ).toContainText(/\$/)
+    const renewal = page
+      .getByRole('region', { name: 'Renewals' })
+      .getByRole('listitem')
+      .filter({ hasText: org.name })
+    await expect(renewal).toContainText('Small provider')
+    await expect(renewal).toContainText('5,000')
+    await expect(renewal).not.toContainText('Overdue')
+  })
+
   test('the team grows by invitation, and the newcomer lands in the staff area', async ({ as }) => {
     const page = await as(sam)
     await page.goto('/staff/team')
