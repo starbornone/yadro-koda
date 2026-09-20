@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { dayOf, endOfDay, formatDay, today } from './format'
+import { dayOf, endOfDay, formatDay, formatMoney, today } from './format'
+
+describe('formatMoney', () => {
+  it('shows whole units of the site currency, and a dash for nothing', () => {
+    expect(formatMoney(5000)).toMatch(/5,000/)
+    expect(formatMoney(5000)).toMatch(/A?\$/)
+    expect(formatMoney(1234.56)).toMatch(/1,235/)
+    expect(formatMoney(0)).toMatch(/0/)
+    expect(formatMoney(null)).toBe('—')
+    expect(formatMoney(undefined)).toBe('—')
+    expect(formatMoney(Number.NaN)).toBe('—')
+  })
+})
 
 describe('calendar dates', () => {
   it('turns an instant into the viewer’s calendar date and back', () => {

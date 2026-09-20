@@ -1,4 +1,11 @@
+import { siteConfig } from '@/config/site'
+
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' })
+const moneyFormat = new Intl.NumberFormat(undefined, {
+  style: 'currency',
+  currency: siteConfig.currency,
+  maximumFractionDigits: 0,
+})
 const dateTimeFormat = new Intl.DateTimeFormat(undefined, {
   dateStyle: 'medium',
   timeStyle: 'short',
@@ -9,6 +16,10 @@ const format = (iso: string | null | undefined, formatter: Intl.DateTimeFormat) 
   const date = new Date(iso)
   return Number.isNaN(date.getTime()) ? '—' : formatter.format(date)
 }
+
+/** An amount in the site's currency, whole units ("A$5,000"); an em dash when missing. */
+export const formatMoney = (amount: number | null | undefined) =>
+  amount === null || amount === undefined || Number.isNaN(amount) ? '—' : moneyFormat.format(amount)
 
 /** "15 Jan 2026" in the viewer's locale; an em dash for missing or invalid input. */
 export const formatDate = (iso: string | null | undefined) => format(iso, dateFormat)
