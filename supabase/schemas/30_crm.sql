@@ -43,6 +43,18 @@ create table public.customers (
   -- database keeps it an object of modest size; the app knows the fields.
   details jsonb not null default '{}'::jsonb
     check (jsonb_typeof(details) = 'object' and pg_column_size(details) <= 16384),
+  -- The commercial facts: which of the product's plans, what it is worth a year, when the deal
+  -- should close (while it is open) or renews (once it is won), and why it was lost or churned.
+  plan text check (plan is null or char_length(plan) between 1 and 100),
+  annual_value numeric(12, 2) check (annual_value is null or annual_value >= 0),
+  expected_close date,
+  renews_on date,
+  outcome_reason text
+    check (outcome_reason is null or char_length(outcome_reason) between 1 and 500),
+  -- Kept by trigger (track_stage): when the current stage was entered, and when the customer
+  -- first became active. Not writable by clients.
+  stage_changed_at timestamptz not null default now(),
+  won_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -52,6 +64,7 @@ comment on table public.customers is
 
 create index customers_stage_idx on public.customers (stage);
 create index customers_owner_id_idx on public.customers (owner_id);
+create index customers_renews_on_idx on public.customers (renews_on) where renews_on is not null;
 
 create table public.contacts (
   id uuid primary key default gen_random_uuid(),
@@ -189,6 +202,28 @@ create trigger customers_log_stage_change
   when (old.stage is distinct from new.stage)
   execute function public.log_stage_change();
 
+-- The dates the pipeline keeps for itself: when this stage was entered (time in stage, stale
+-- leads) and when the customer was first won. Clients cannot write either.
+create or replace function public.track_stage()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  new.stage_changed_at := now();
+  if new.stage = 'active' and old.won_at is null then
+    new.won_at := now();
+  end if;
+  return new;
+end;
+$$;
+
+create trigger customers_track_stage
+  before update of stage on public.customers
+  for each row
+  when (old.stage is distinct from new.stage)
+  execute function public.track_stage();
+
 -- Making a contact primary demotes the organisation's previous primary contact.
 create or replace function public.set_primary_contact()
 returns trigger
@@ -286,7 +321,9 @@ revoke all on table public.customers, public.contacts, public.activities, public
 -- customers: rows come and go with their organisation (trigger + cascade), never directly.
 revoke insert, delete on table public.customers from authenticated;
 revoke update on table public.customers from authenticated;
-grant update (stage, owner_id, source, details) on table public.customers to authenticated;
+grant update (
+  stage, owner_id, source, details, plan, annual_value, expected_close, renews_on, outcome_reason
+) on table public.customers to authenticated;
 
 create policy "customers_select_staff"
   on public.customers
@@ -400,17 +437,18 @@ create policy "tasks_delete_creator_or_manager"
   using (created_by = (select auth.uid()) or public.platform_can_manage_customers());
 
 -- ---------------------------------------------------------------------------
--- Pipeline counts, for the staff overview. Runs as the caller, so RLS applies.
+-- The pipeline by stage — how many, and what they are worth a year — for the staff overview.
+-- Runs as the caller, so RLS applies.
 -- ---------------------------------------------------------------------------
 
-create view public.customer_stage_counts
+create view public.customer_stage_summary
 with (security_invoker = true)
 as
-  select stage, count(*)::int as count
+  select stage, count(*)::int as count, coalesce(sum(annual_value), 0)::numeric(14, 2) as value
   from public.customers
   group by stage;
 
-revoke all on table public.customer_stage_counts from anon;
+revoke all on table public.customer_stage_summary from anon;
 
 -- ---------------------------------------------------------------------------
 -- create_lead(): staff enter an organisation before it has any users. It starts at `lead`,

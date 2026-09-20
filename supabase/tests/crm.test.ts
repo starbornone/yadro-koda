@@ -16,9 +16,9 @@ describe('the customer record', () => {
     for (const table of CRM_TABLES) {
       expect(await as(f.olive, () => sql(`select * from public.${table}`))).toHaveLength(0)
     }
-    expect(await as(f.olive, () => sql(`select * from public.customer_stage_counts`))).toHaveLength(
-      0,
-    )
+    expect(
+      await as(f.olive, () => sql(`select * from public.customer_stage_summary`)),
+    ).toHaveLength(0)
     expect(
       await failure(
         as(f.olive, () =>
@@ -33,10 +33,11 @@ describe('the customer record', () => {
       await as(f.sue, () => sql(`select org_id from public.customers where org_id = $1`, [f.acme])),
     ).toHaveLength(1)
     expect(
-      await as(f.sue, () => sql(`select stage, count from public.customer_stage_counts`)),
+      await as(f.sue, () => sql(`select stage, count, value from public.customer_stage_summary`)),
     ).toContainEqual({
       stage: 'trial',
       count: expect.any(Number),
+      value: expect.any(String),
     })
   })
 })
@@ -303,6 +304,90 @@ describe('the pipeline', () => {
         created_by: f.pat.id,
       })
     })
+  })
+
+  it('keeps the dates of its own: when the stage changed, and when the customer was won', async () => {
+    await scratch(async () => {
+      const dates = () =>
+        sql<{ stage_changed_at: Date; won_at: Date | null; now: Date }>(
+          `select stage_changed_at, won_at, now() as now from public.customers where org_id = $1`,
+          [f.acme],
+        )
+      // As if the stage had been entered yesterday. (now() is fixed for the test's transaction.)
+      await sql(
+        `update public.customers set stage_changed_at = now() - interval '1 day' where org_id = $1`,
+        [f.acme],
+      )
+      const [before] = await dates()
+      expect(before?.won_at).toBeNull()
+
+      // A change that is not the stage leaves both alone.
+      await as(f.pat, () =>
+        affected(`update public.customers set plan = 'Small' where org_id = $1`, [f.acme]),
+      )
+      expect((await dates())[0]).toEqual(before)
+
+      // Winning stamps both; moving on again restamps the stage's date and keeps the win.
+      expect(await setStage(f.pat, 'active')).toBe(1)
+      const [won] = await dates()
+      expect(won!.stage_changed_at).toEqual(won!.now)
+      expect(won!.won_at).toEqual(won!.now)
+
+      await sql(
+        `update public.customers set stage_changed_at = now() - interval '1 day' where org_id = $1`,
+        [f.acme],
+      )
+      await setStage(f.pat, 'churned')
+      const [churned] = await dates()
+      expect(churned!.stage_changed_at).toEqual(churned!.now)
+      expect(churned!.won_at).toEqual(won!.won_at)
+
+      // Nobody sets them by hand.
+      expect(
+        await failure(
+          as(f.pat, () =>
+            affected(`update public.customers set won_at = now() where org_id = $1`, [f.acme]),
+          ),
+        ),
+      ).toMatch(/permission denied/)
+    })
+  })
+
+  it('holds the commercial facts for admins and up, within reason', async () => {
+    const setFacts = (actor: Fixtures['rex'], set: string) =>
+      as(actor, () => affected(`update public.customers set ${set} where org_id = $1`, [f.acme]))
+    expect(await setFacts(f.sue, `plan = 'Small'`)).toBe(0)
+    await scratch(async () => {
+      expect(
+        await setFacts(
+          f.pat,
+          `plan = 'Small', annual_value = 5000, expected_close = '2027-03-31', renews_on = null, outcome_reason = null`,
+        ),
+      ).toBe(1)
+      const [facts] = await sql(
+        `select plan, annual_value, expected_close::text from public.customers where org_id = $1`,
+        [f.acme],
+      )
+      expect(facts).toEqual({
+        plan: 'Small',
+        annual_value: '5000.00',
+        expected_close: '2027-03-31',
+      })
+      // The view sums it into the stage.
+      const rows = await as(f.sue, () =>
+        sql<{ stage: string; value: string }>(
+          `select stage, value from public.customer_stage_summary where stage = 'trial'`,
+        ),
+      )
+      expect(Number(rows[0]?.value)).toBeGreaterThanOrEqual(5000)
+    })
+    expect(await failure(setFacts(f.pat, `annual_value = -1`))).toMatch(
+      /customers_annual_value_check/,
+    )
+    expect(await failure(setFacts(f.pat, `plan = ''`))).toMatch(/customers_plan_check/)
+    expect(await failure(setFacts(f.pat, `outcome_reason = repeat('x', 501)`))).toMatch(
+      /customers_outcome_reason_check/,
+    )
   })
 
   it('only exposes stage, owner and source to clients', async () => {
