@@ -15,10 +15,11 @@ import { readResetLinkError } from '@/lib/auth/password-reset'
 import { canInOrg, canOnPlatform } from '@/lib/auth/permissions'
 import {
   getCustomerRecord,
-  getStageCounts,
+  getStageSummary,
   isCustomerStage,
   listMyOpenTasks,
   listRecentActivities,
+  listUpcomingRenewals,
   type CustomerStage,
 } from '@/lib/supabase/crm'
 import { getInvitation, listInvitations } from '@/lib/supabase/invitations'
@@ -359,13 +360,14 @@ const staffOverviewRoute = createRoute({
   path: '/staff',
   loader: async ({ context, parentMatchPromise }) => {
     await guardedBy(parentMatchPromise)
-    const [overview, stages, tasks, activities] = await Promise.all([
+    const [overview, stages, renewals, tasks, activities] = await Promise.all([
       getPlatformOverview(),
-      getStageCounts(),
+      getStageSummary(),
+      listUpcomingRenewals(),
       listMyOpenTasks(context.user.id),
       listRecentActivities(),
     ])
-    return { ...overview, stages, tasks, activities }
+    return { ...overview, stages, renewals, tasks, activities }
   },
   head: () => ({ meta: [{ title: 'Staff' }] }),
   component: lazyRouteComponent(

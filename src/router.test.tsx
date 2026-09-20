@@ -91,7 +91,8 @@ vi.mock('@/lib/supabase/platform', () => platform)
 
 const crm = vi.hoisted(() => ({
   getCustomerRecord: vi.fn(),
-  getStageCounts: vi.fn(),
+  getStageSummary: vi.fn(),
+  listUpcomingRenewals: vi.fn(),
   listMyOpenTasks: vi.fn(),
   listRecentActivities: vi.fn(),
 }))
@@ -139,7 +140,8 @@ beforeEach(() => {
   platform.listPlatformMembers.mockReset().mockResolvedValue([])
   platform.listPlatformInvitations.mockReset().mockResolvedValue([])
   crm.getCustomerRecord.mockReset().mockResolvedValue(null)
-  crm.getStageCounts.mockReset().mockResolvedValue({})
+  crm.getStageSummary.mockReset().mockResolvedValue({})
+  crm.listUpcomingRenewals.mockReset().mockResolvedValue([])
   crm.listMyOpenTasks.mockReset().mockResolvedValue([])
   crm.listRecentActivities.mockReset().mockResolvedValue([])
 })
@@ -517,7 +519,8 @@ describe('staff', () => {
     renderAt('/staff')
 
     expect(await screen.findByText('staff overview')).toBeInTheDocument()
-    expect(crm.getStageCounts).toHaveBeenCalled()
+    expect(crm.getStageSummary).toHaveBeenCalled()
+    expect(crm.listUpcomingRenewals).toHaveBeenCalled()
     expect(crm.listMyOpenTasks).toHaveBeenCalledWith('user-1')
     expect(crm.listRecentActivities).toHaveBeenCalled()
   })
