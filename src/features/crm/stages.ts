@@ -20,7 +20,8 @@ export const ACTIVITY_KIND_LABELS: Record<ActivityKind, string> = {
   meeting: 'Meeting',
   stage_change: 'Stage change',
   joined: 'Joined',
+  enquiry: 'Enquiry',
 }
 
-/** The kinds a person can log; `stage_change` and `joined` rows come from the database. */
+/** The kinds a person can log; the rest come from the database. */
 export const LOGGABLE_ACTIVITY_KINDS = ['note', 'call', 'email', 'meeting'] as const

@@ -209,6 +209,8 @@ export class People {
       .delete()
       .like('email', `${this.prefix}%`)
     if (invitations.error) throw invitations.error
+    const attempts = await admin.from('enquiry_attempts').delete().like('email', `${this.prefix}%`)
+    if (attempts.error) throw attempts.error
 
     for (const person of this.created) {
       const { error } = await admin.auth.admin.deleteUser(person.id)

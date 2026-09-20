@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   ArrowRightLeftIcon,
+  GlobeIcon,
   MailIcon,
   MessageSquareTextIcon,
   PhoneIcon,
@@ -21,11 +22,16 @@ const KIND_ICONS: Record<Activity['kind'], typeof MailIcon> = {
   meeting: UsersRoundIcon,
   stage_change: ArrowRightLeftIcon,
   joined: UserPlusIcon,
+  enquiry: GlobeIcon,
 }
+
+/** Who did it: the author, or the website when the visitor did it themselves. */
+const byline = (activity: Activity) =>
+  activity.kind === 'enquiry' && !activity.author ? 'Website' : personName(activity.author)
 
 type ActivityEntryProps = {
   activity: Activity
-  /** Who the entry was with, when the listing knows and it is worth saying. */
+  /** Who the entry was with (or, for an enquiry, from), when the listing knows and it is worth saying. */
   withContact?: string
   /** Where it happened, when the listing spans organisations. */
   organisation?: Pick<Organisation, 'id' | 'name'>
@@ -52,10 +58,10 @@ export const ActivityEntry = ({
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <p className="text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">{personName(activity.author)}</span>
+          <span className="font-medium text-foreground">{byline(activity)}</span>
           {' · '}
           {ACTIVITY_KIND_LABELS[activity.kind]}
-          {withContact ? ` with ${withContact}` : ''}
+          {withContact ? `${activity.kind === 'enquiry' ? ' from ' : ' with '}${withContact}` : ''}
           {organisation ? (
             <>
               {' · '}

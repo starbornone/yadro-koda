@@ -102,6 +102,46 @@ test.describe('the staff area', () => {
     await expect(page.getByRole('row', { name: tessa.email })).toContainText('Support')
   })
 
+  test('an enquiry from the website becomes a lead, with its contact and its entry', async ({
+    page,
+    as,
+    people,
+  }) => {
+    const name = `${people.prefix}-enquiry`
+    const email = `${people.prefix}-visitor@yadro.test`
+
+    // A visitor, signed out, from the home page.
+    await page.goto('/')
+    await page.getByRole('link', { name: 'Get started' }).first().click()
+    await expect(page).toHaveURL('/get-started')
+    await page.getByLabel('Organisation', { exact: true }).fill(name)
+    await page.getByLabel('Your name').fill('Vera Visitor')
+    await page.getByLabel('Email', { exact: true }).fill(email)
+    await page.getByLabel('Size').selectOption('small')
+    await page.getByLabel('Core').click()
+    await page.getByLabel('Anything else?').fill('Keen to see a demo.')
+    await page.getByRole('button', { name: 'Send' }).click()
+    await expect(page.getByRole('status')).toContainText(email)
+
+    // Staff find them in the pipeline.
+    const staff = await as(sam)
+    await staff.goto('/staff/organisations')
+    await staff.getByLabel('Search organisations').fill(name)
+    await staff.getByRole('button', { name: 'Search', exact: true }).click()
+    const row = staff.getByRole('row', { name })
+    await expect(row).toContainText('Lead')
+    await row.getByRole('link', { name }).click()
+
+    await expect(staff.getByRole('heading', { name })).toBeVisible()
+    await expect(staff.getByRole('region', { name: 'Details' }).getByLabel('Size')).toHaveValue(
+      'small',
+    )
+    await expect(staff.getByRole('region', { name: 'Contacts' })).toContainText('Vera Visitor')
+    const timeline = staff.getByRole('list').filter({ hasText: 'Enquired through the website' })
+    await expect(timeline).toContainText('Website · Enquiry from Vera Visitor')
+    await expect(timeline).toContainText('Keen to see a demo.')
+  })
+
   test('someone who is both staff and a member chooses where to go', async ({ as, people }) => {
     await people.join(sam, org.id, 'member')
 
