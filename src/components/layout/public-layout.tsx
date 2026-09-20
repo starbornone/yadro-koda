@@ -33,7 +33,7 @@ const AuthActions = () => {
         <Link to="/login">Sign in</Link>
       </Button>
       <Button asChild size="sm">
-        <Link to="/signup">Get started</Link>
+        <Link to={homeContent.getStartedPath}>{homeContent.hero.primaryCta}</Link>
       </Button>
     </>
   )
