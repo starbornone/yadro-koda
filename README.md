@@ -240,7 +240,12 @@ staff know about it lives in tables tenants cannot read (`supabase/schemas/30_cr
   asks for them, and the database keeps the object well-formed and small without knowing the
   keys, so a product changes its fields without a migration. A self-serve sign-up starts at
   `trial`; `create_lead()` starts at `lead`, owned by whoever entered it, with the details given.
-  Every stage change is logged to the timeline by trigger.
+  Every stage change is logged to the timeline by trigger. The **commercial facts** sit beside
+  the stage: `plan` (free text until a price book names them), `annual_value` (in
+  `siteConfig.currency`), `expected_close` while the deal is open, `renews_on` once it is won,
+  and `outcome_reason` when it is lost or churned — the pipeline form asks for whichever the
+  chosen stage needs. Two dates are the database's own: `stage_changed_at` (time in stage) and
+  `won_at`, stamped by trigger and not writable by clients.
 - `contacts` — people at the customer, whether or not they have a sign-in; one primary per
   organisation. `user_id` links a contact to their account: set by trigger when someone joins
   the organisation with the same email (typically by accepting an invitation), never by hand.
@@ -249,9 +254,28 @@ staff know about it lives in tables tenants cannot read (`supabase/schemas/30_cr
   admin") — the moment a lead becomes a tenant, in the record — and enquiries from the website.
 - `tasks` — follow-ups with a due date and a staff assignee; the overview lists yours.
 
-The overview's **Latest** section is the newest entries from every timeline in one list — a join
-here, a stage change there, a colleague's call — each linking to its customer record: the
-morning read.
+The overview adds it up: **Pipeline** (the value sitting in `lead`, `qualified` and `trial`),
+**Annual recurring revenue** (the value of `active` customers), the value under each stage's
+count, and **Renewals** — active customers renewing in the next 90 days, soonest first, with
+the ones whose date has slipped flagged. The **Latest** section is the newest entries from
+every timeline in one list — a join here, a stage change there, a colleague's call — each
+linking to its customer record: the morning read.
+
+**Renaming a stage.** The funnel is generic; a product that sells differently renames it — say
+`trial` becomes `proposal`. It is one migration and one file:
+
+1. `alter type public.customer_stage rename value 'trial' to 'proposal';` — Postgres renames
+   the value in place; every row, index and policy follows. If the renamed value was the one
+   `create_customer_for_organisation()` gives self-serve sign-ups, replace that function in the
+   same migration with the new default.
+2. In [`src/features/crm/stages.ts`](src/features/crm/stages.ts), rename the key in
+   `CUSTOMER_STAGE_LABELS` and in `PIPELINE_STAGES` / `WON_STAGE` / `CLOSED_STAGES` as the new
+   funnel needs; `CUSTOMER_STAGES` in `crm.ts` lists the enum in order — `pnpm typecheck` points
+   at every other place the old name was used.
+3. `pnpm db:types`, then `pnpm test` and `pnpm db:test`: the tests name stages too.
+
+Adding a stage is the same with `add value` (on its own, in a migration before any that uses
+it) and a new entry in each list.
 
 **Leads come in three ways.** Staff enter one (`/staff/organisations/new`, `create_lead()`); a
 person signs up and creates their organisation themselves (it starts at `trial`); or a visitor
