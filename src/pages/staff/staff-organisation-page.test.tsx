@@ -150,6 +150,16 @@ const activities: Activity[] = [
     created_by: 'user-9',
     author: { id: 'user-9', display_name: 'Grace Hopper', email: null },
   },
+  {
+    id: 'act-4',
+    org_id: 'org-1',
+    contact_id: 'contact-1',
+    kind: 'enquiry',
+    body: 'Enquired through the website: We have 30 participants.',
+    occurred_at: '2026-01-01T10:00:00Z',
+    created_by: null,
+    author: null,
+  },
 ]
 
 const tasks: Task[] = [
@@ -249,6 +259,10 @@ describe('StaffOrganisationPage', () => {
     const joined = screen.getByText('Accepted an invitation as admin').closest('li')!
     expect(joined).toHaveTextContent(/Grace Hopper · Joined · /)
     expect(joined).not.toHaveTextContent(/with Grace Hopper/)
+    // An enquiry has no author — the website did it — and is from its contact, not with them.
+    expect(screen.getByText(/We have 30 participants/).closest('li')).toHaveTextContent(
+      /Website · Enquiry from Grace Hopper · /,
+    )
     // Tasks: open ones listed and overdue flagged, completed ones folded away.
     expect(screen.getByText('Send proposal').closest('li')).toHaveTextContent(/Overdue/)
     expect(screen.getByRole('button', { name: 'Completed (1)' })).toBeInTheDocument()

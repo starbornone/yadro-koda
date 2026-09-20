@@ -101,6 +101,153 @@ describe('create_lead()', () => {
   })
 })
 
+describe('submit_enquiry()', () => {
+  // Calls come from an address; the gateway tells the database which in a header.
+  const from = (ip: string) =>
+    sql(`select set_config('request.headers', $1, true)`, [
+      JSON.stringify({ 'x-forwarded-for': ip }),
+    ])
+  const enquire = (email: string, extra: Record<string, unknown> = {}) =>
+    as(null, () =>
+      sql(
+        `select public.submit_enquiry(
+           organisation => $1, contact_name => $2, email => $3, phone => $4, message => $5,
+           details => $6::jsonb, website_url => $7
+         )`,
+        [
+          extra.organisation ?? 'Initech Pty Ltd',
+          extra.contact_name ?? ' Peter Gibbons ',
+          email,
+          extra.phone ?? null,
+          extra.message ?? null,
+          JSON.stringify(extra.details ?? {}),
+          extra.website_url ?? null,
+        ],
+      ),
+    )
+  const leadsNamed = (name: string) =>
+    sql<{ id: string; slug: string }>(`select id, slug from public.organisations where name = $1`, [
+      name,
+    ])
+
+  it('turns a visitor into a lead with a contact and an entry, telling them nothing', async () => {
+    await scratch(async () => {
+      await from('203.0.113.7')
+      expect(
+        await enquire('Peter@Initech.test', {
+          phone: ' 0400 000 000 ',
+          message: '  We have 30 participants. ',
+          details: { seats: 12, interests: ['core'] },
+        }),
+      ).toEqual([{ submit_enquiry: '' }])
+
+      const [org] = await leadsNamed('Initech Pty Ltd')
+      expect(org?.slug).toBe('initech-pty-ltd')
+      const [customer] = await sql<{ stage: string; source: string; details: unknown }>(
+        `select stage, source, details from public.customers where org_id = $1`,
+        [org!.id],
+      )
+      expect(customer).toEqual({
+        stage: 'lead',
+        source: 'website',
+        details: { seats: 12, interests: ['core'] },
+      })
+      const contacts = await sql(
+        `select name, email, phone, is_primary, created_by from public.contacts where org_id = $1`,
+        [org!.id],
+      )
+      expect(contacts).toEqual([
+        {
+          name: 'Peter Gibbons',
+          email: 'peter@initech.test',
+          phone: '0400 000 000',
+          is_primary: true,
+          created_by: null,
+        },
+      ])
+      const entries = await sql<{ kind: string; body: string; created_by: string | null }>(
+        `select kind, body, created_by from public.activities where org_id = $1`,
+        [org!.id],
+      )
+      expect(entries).toEqual([
+        {
+          kind: 'enquiry',
+          body: 'Enquired through the website: We have 30 participants.',
+          created_by: null,
+        },
+      ])
+      // Nobody joined, and the attempt is on record.
+      expect(
+        await sql(`select 1 from public.memberships where org_id = $1`, [org!.id]),
+      ).toHaveLength(0)
+      expect(
+        await sql(`select 1 from public.enquiry_attempts where email = 'peter@initech.test'`),
+      ).toHaveLength(1)
+    })
+  })
+
+  it('takes a taken slug in its stride, and a name that makes no slug', async () => {
+    await scratch(async () => {
+      await from('203.0.113.8')
+      await enquire('one@initech.test', { organisation: 'Acme' })
+      await enquire('two@initech.test', { organisation: 'Acme' })
+      const slugs = (
+        await sql<{ slug: string }>(`select slug from public.organisations where name = 'Acme'`)
+      )
+        .map((row) => row.slug)
+        .sort()
+      // The seed's Acme, then the plain slug, then one with a suffix.
+      expect(slugs).toHaveLength(3)
+      expect(slugs).toContain('acme')
+      expect(slugs.filter((slug) => /^acme-[0-9a-f]{4}$/.test(slug))).toHaveLength(1)
+
+      await enquire('three@initech.test', { organisation: '!!!' })
+      expect((await leadsNamed('!!!'))[0]?.slug).toBe('enquiry')
+    })
+  })
+
+  it('says nothing to a bot, and nothing to the same person twice in a day', async () => {
+    await scratch(async () => {
+      await from('203.0.113.9')
+      await enquire('bot@initech.test', { website_url: 'https://spam.example' })
+      expect(await leadsNamed('Initech Pty Ltd')).toHaveLength(0)
+
+      await enquire('peter@initech.test')
+      await enquire('PETER@initech.test', { organisation: 'Initech again' })
+      expect(await leadsNamed('Initech Pty Ltd')).toHaveLength(1)
+      expect(await leadsNamed('Initech again')).toHaveLength(0)
+    })
+  })
+
+  it('refuses a twenty-first enquiry in an hour from one address, and bad input', async () => {
+    await scratch(async () => {
+      await from('203.0.113.10')
+      for (let n = 1; n <= 20; n += 1) await enquire(`p${n}@initech.test`)
+      expect(await failure(enquire('p21@initech.test'))).toMatch(/too many enquiries/)
+      // Another address is fine.
+      await from('203.0.113.11')
+      await enquire('p21@initech.test')
+      expect(await leadsNamed('Initech Pty Ltd')).toHaveLength(21)
+    })
+    await from('203.0.113.12')
+    expect(await failure(enquire('not-an-email'))).toMatch(/email address is not valid/)
+    expect(await failure(enquire('x@y.z', { organisation: '   ' }))).toMatch(/organisation name/)
+    expect(await failure(enquire('x@y.z', { contact_name: 'x'.repeat(101) }))).toMatch(
+      /contact name/,
+    )
+    await sql(`select set_config('request.headers', '', true)`)
+  })
+
+  it('keeps its attempts table to itself', async () => {
+    expect(await failure(as(f.sam, () => sql(`select * from public.enquiry_attempts`)))).toMatch(
+      /permission denied/,
+    )
+    expect(await failure(as(null, () => sql(`select * from public.enquiry_attempts`)))).toMatch(
+      /permission denied/,
+    )
+  })
+})
+
 describe('customer details', () => {
   const setDetails = (actor: Fixtures['rex'], details: string) =>
     as(actor, () =>
@@ -239,8 +386,8 @@ describe('contacts, activities and tasks', () => {
     })
   })
 
-  it('never let a client write a stage change or a join, or forge the author', async () => {
-    for (const kind of ['stage_change', 'joined']) {
+  it('never let a client write a stage change, a join or an enquiry, or forge the author', async () => {
+    for (const kind of ['stage_change', 'joined', 'enquiry']) {
       expect(
         await failure(
           as(f.sue, () =>
