@@ -1,7 +1,7 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ActivityWithOrganisation, TaskWithOrganisation } from '@/lib/supabase/crm'
+import type { ActivityWithOrganisation, Renewal, TaskWithOrganisation } from '@/lib/supabase/crm'
 import { renderStaff } from '@/test/render-authenticated'
 import { StaffOverviewPage } from './staff-overview-page'
 
@@ -55,14 +55,41 @@ const activities: ActivityWithOrganisation[] = [
   },
 ]
 
-const renderPage = (overrides: Partial<{ activities: ActivityWithOrganisation[] }> = {}) =>
+const renewals: Renewal[] = [
+  {
+    org_id: acme.id,
+    plan: 'Small',
+    annual_value: 5000,
+    renews_on: '2000-01-01',
+    organisation: acme,
+  },
+  {
+    org_id: globex.id,
+    plan: null,
+    annual_value: null,
+    renews_on: '2999-12-31',
+    organisation: globex,
+  },
+]
+
+const renderPage = (
+  overrides: Partial<{ activities: ActivityWithOrganisation[]; renewals: Renewal[] }> = {},
+) =>
   renderStaff(<StaffOverviewPage />, {
     path: '/staff',
     loaderData: {
       organisations: 12,
       memberships: 40,
       staff: 3,
-      stages: { lead: 4, qualified: 2, trial: 1, active: 5, churned: 0, lost: 0 },
+      stages: {
+        lead: { count: 4, value: 20000 },
+        qualified: { count: 2, value: 15000 },
+        trial: { count: 1, value: 0 },
+        active: { count: 5, value: 42000 },
+        churned: { count: 0, value: 0 },
+        lost: { count: 0, value: 0 },
+      },
+      renewals,
       tasks,
       activities,
       ...overrides,
@@ -89,6 +116,15 @@ describe('StaffOverviewPage', () => {
       'href',
       '/staff/organisations?stage=lead',
     )
+    // What each stage is worth, where anything is; the open stages add up to the pipeline card.
+    expect(pipeline.getByRole('link', { name: /Lead/ })).toHaveTextContent(/20,000/)
+    expect(pipeline.getByRole('link', { name: /Trial/ })).not.toHaveTextContent(/\$/)
+    const card = (label: string) =>
+      screen
+        .getByText(label, { selector: '[data-slot=card-description]' })
+        .closest('[data-slot=card]')
+    expect(card('Pipeline')).toHaveTextContent(/35,000/)
+    expect(card('Annual recurring revenue')).toHaveTextContent(/42,000/)
     const task = screen.getByText('Send proposal').closest('li')!
     expect(task).toHaveTextContent(/Overdue/)
     expect(within(task).getByRole('link', { name: 'Acme' })).toHaveAttribute(
@@ -120,6 +156,28 @@ describe('StaffOverviewPage', () => {
     renderPage({ activities: [] })
     const latest = within(await screen.findByRole('region', { name: 'Latest' }))
     expect(latest.getByText('Nothing logged yet.')).toBeInTheDocument()
+  })
+
+  it('lists renewals coming up, flags the ones that slipped, and says when there are none', async () => {
+    renderPage()
+    const section = within(await screen.findByRole('region', { name: 'Renewals' }))
+    const rows = section.getAllByRole('listitem')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toHaveTextContent(/Acme.*Small.*5,000.*Overdue/)
+    expect(within(rows[0]!).getByRole('link', { name: 'Acme' })).toHaveAttribute(
+      'href',
+      '/staff/organisations/org-1',
+    )
+    expect(rows[1]).toHaveTextContent(/Globex.*—/)
+    expect(rows[1]).not.toHaveTextContent(/Overdue/)
+
+    cleanup()
+    renderPage({ renewals: [] })
+    expect(
+      within(await screen.findByRole('region', { name: 'Renewals' })).getByText(
+        'Nothing renews in the next 90 days.',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('completes a task from the list and refreshes', async () => {

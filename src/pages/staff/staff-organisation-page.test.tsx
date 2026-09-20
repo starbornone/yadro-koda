@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Activity, Contact, Customer, Task } from '@/lib/supabase/crm'
 import type { Invitation } from '@/lib/supabase/invitations'
+import { formatDate, formatDay } from '@/lib/format'
 import type { OrganisationDetail, PlatformMember } from '@/lib/supabase/platform'
 import { renderStaff } from '@/test/render-authenticated'
 import { StaffOrganisationPage } from './staff-organisation-page'
@@ -88,6 +89,13 @@ const customer: Customer = {
     budget_confirmed: true,
     legacy_region: 'NSW',
   },
+  plan: 'Small provider',
+  annual_value: 5000,
+  expected_close: '2026-03-31',
+  renews_on: null,
+  outcome_reason: null,
+  stage_changed_at: '2026-01-15T10:00:00Z',
+  won_at: null,
   updated_at: '2026-01-02T00:00:00Z',
   owner: { id: 'user-2', display_name: 'Linus', email: null },
 }
@@ -280,6 +288,16 @@ describe('StaffOrganisationPage', () => {
     await screen.findByRole('heading', { level: 1, name: 'Acme' })
     expect(screen.queryByLabelText('Stage')).not.toBeInTheDocument()
     expect(screen.getAllByText('Lead')).toHaveLength(2)
+    // The commercial facts, read-only, with the date that matters for an open deal.
+    const pipeline = within(screen.getByRole('region', { name: 'Pipeline' }))
+    expect(pipeline.getByText('Plan').nextSibling).toHaveTextContent('Small provider')
+    expect(pipeline.getByText('Annual value').nextSibling).toHaveTextContent(/5,000/)
+    expect(pipeline.getByText('Expected close').nextSibling).toHaveTextContent(
+      formatDay('2026-03-31'),
+    )
+    expect(pipeline.getByText(/since/)).toHaveTextContent(formatDate('2026-01-15T10:00:00Z'))
+    expect(pipeline.queryByText('Renews on')).not.toBeInTheDocument()
+    expect(pipeline.queryByText('Reason')).not.toBeInTheDocument()
     expect(screen.getByLabelText('What happened')).toBeInTheDocument()
     expect(screen.getByLabelText('New task')).toBeInTheDocument()
     // Contact 2 and task 2 were created by user-1 (the viewer); the others were not.
@@ -298,6 +316,8 @@ describe('StaffOrganisationPage', () => {
 
     await user.selectOptions(await screen.findByLabelText('Stage'), 'qualified')
     await user.selectOptions(screen.getByLabelText('Owner'), 'user-1')
+    await user.clear(screen.getByLabelText(/Annual value/))
+    await user.type(screen.getByLabelText(/Annual value/), '7500')
     await user.click(
       within(screen.getByRole('region', { name: 'Pipeline' })).getByRole('button', {
         name: 'Save',
@@ -308,6 +328,11 @@ describe('StaffOrganisationPage', () => {
       stage: 'qualified',
       owner_id: 'user-1',
       source: 'Website',
+      plan: 'Small provider',
+      annual_value: 7500,
+      expected_close: '2026-03-31',
+      renews_on: '',
+      outcome_reason: '',
     })
     expect(await screen.findByRole('status')).toHaveTextContent('Saved.')
     await waitFor(() => expect(invalidate).toHaveBeenCalled())
@@ -347,6 +372,31 @@ describe('StaffOrganisationPage', () => {
       },
     })
     expect(await details.findByRole('status')).toHaveTextContent('Saved.')
+  })
+
+  it('asks for the date or the reason the chosen stage needs', async () => {
+    const user = userEvent.setup()
+    renderPage('admin')
+    const stage = await screen.findByLabelText('Stage')
+
+    // Open: when it should close. Won: when it renews. Over: why.
+    expect(screen.getByLabelText('Expected close')).toHaveValue('2026-03-31')
+    await user.selectOptions(stage, 'active')
+    expect(screen.queryByLabelText('Expected close')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Renews on')).toBeInTheDocument()
+    await user.selectOptions(stage, 'lost')
+    expect(screen.queryByLabelText('Renews on')).not.toBeInTheDocument()
+    await user.type(screen.getByLabelText('Reason'), 'Went with a consultant')
+    await user.click(
+      within(screen.getByRole('region', { name: 'Pipeline' })).getByRole('button', {
+        name: 'Save',
+      }),
+    )
+
+    expect(crm.updateCustomer).toHaveBeenCalledWith(
+      'org-1',
+      expect.objectContaining({ stage: 'lost', outcome_reason: 'Went with a consultant' }),
+    )
   })
 
   it('adds a contact', async () => {

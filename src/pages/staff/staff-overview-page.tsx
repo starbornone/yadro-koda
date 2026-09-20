@@ -1,35 +1,56 @@
 import { Link, getRouteApi } from '@tanstack/react-router'
-import { Building2Icon, CircleAlertIcon, ShieldIcon, UsersIcon } from 'lucide-react'
+import {
+  BanknoteIcon,
+  Building2Icon,
+  CircleAlertIcon,
+  RepeatIcon,
+  ShieldIcon,
+  UsersIcon,
+} from 'lucide-react'
 import { PageHeader } from '@/components/layout/page-header'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useRouteAction } from '@/hooks/use-route-action'
 import { ActivityEntry } from '@/features/crm/components/activity-entry'
-import { CUSTOMER_STAGE_LABELS } from '@/features/crm/stages'
-import { formatDay, today } from '@/lib/format'
+import { CUSTOMER_STAGE_LABELS, PIPELINE_STAGES, WON_STAGE } from '@/features/crm/stages'
+import { formatDay, formatMoney, today } from '@/lib/format'
 import { CUSTOMER_STAGES, setTaskCompleted } from '@/lib/supabase/crm'
 import { cn } from '@/lib/utils'
 
 const route = getRouteApi('/_authenticated/_staff/staff')
 
 /**
- * Counts across every organisation, the pipeline by stage, the viewer's own follow-ups, and
- * the latest entries on every customer's timeline.
+ * Counts and money across every organisation, the pipeline by stage, renewals coming up, the
+ * viewer's own follow-ups, and the latest entries on every customer's timeline.
  */
 export const StaffOverviewPage = () => {
   const overview = route.useLoaderData()
   const { busy, error, run } = useRouteAction()
 
+  // What the open deals add up to, and what the won ones bring in a year.
+  const pipelineValue = PIPELINE_STAGES.reduce(
+    (sum, stage) => sum + overview.stages[stage].value,
+    0,
+  )
+  const recurringValue = overview.stages[WON_STAGE].value
+
   const stats = [
     {
       label: 'Organisations',
-      value: overview.organisations,
+      value: String(overview.organisations),
       icon: Building2Icon,
       to: '/staff/organisations' as const,
     },
-    { label: 'Memberships', value: overview.memberships, icon: UsersIcon },
-    { label: 'Staff', value: overview.staff, icon: ShieldIcon, to: '/staff/team' as const },
+    { label: 'Memberships', value: String(overview.memberships), icon: UsersIcon },
+    {
+      label: 'Staff',
+      value: String(overview.staff),
+      icon: ShieldIcon,
+      to: '/staff/team' as const,
+    },
+    { label: 'Pipeline', value: formatMoney(pipelineValue), icon: BanknoteIcon },
+    { label: 'Annual recurring revenue', value: formatMoney(recurringValue), icon: RepeatIcon },
   ]
 
   return (
@@ -40,7 +61,7 @@ export const StaffOverviewPage = () => {
           <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
           <p className="text-muted-foreground">Everything across every organisation.</p>
         </div>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {stats.map(({ label, value, icon: Icon, to }) => {
             const card = (
               <Card className="h-full">
@@ -76,13 +97,71 @@ export const StaffOverviewPage = () => {
                   className="flex items-baseline justify-between gap-2 rounded-xl border px-3 py-2 outline-none hover:bg-accent focus-visible:ring-2"
                 >
                   <span className="text-sm">{CUSTOMER_STAGE_LABELS[stage]}</span>
-                  <span className="text-lg font-semibold tabular-nums">
-                    {overview.stages[stage]}
+                  <span className="flex flex-col items-end">
+                    <span className="text-lg font-semibold tabular-nums">
+                      {overview.stages[stage].count}
+                    </span>
+                    {overview.stages[stage].value > 0 ? (
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {formatMoney(overview.stages[stage].value)}
+                      </span>
+                    ) : null}
                   </span>
                 </Link>
               </li>
             ))}
           </ul>
+        </section>
+
+        <section aria-labelledby="renewals-heading" className="flex flex-col gap-3">
+          <div>
+            <h2 id="renewals-heading" className="text-base font-medium">
+              Renewals
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Active customers renewing in the next 90 days.
+            </p>
+          </div>
+          {overview.renewals.length === 0 ? (
+            <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+              Nothing renews in the next 90 days.
+            </p>
+          ) : (
+            <ul className="flex flex-col divide-y rounded-xl border">
+              {overview.renewals.map((renewal) => {
+                const overdue = renewal.renews_on < today()
+                return (
+                  <li key={renewal.org_id} className="flex items-center gap-3 p-3 text-sm">
+                    <span className="min-w-0 flex-1">
+                      <Link
+                        to="/staff/organisations/$orgId"
+                        params={{ orgId: renewal.org_id }}
+                        className="font-medium hover:underline"
+                      >
+                        {renewal.organisation.name}
+                      </Link>
+                      {renewal.plan ? (
+                        <span className="ml-2 text-xs text-muted-foreground">{renewal.plan}</span>
+                      ) : null}
+                    </span>
+                    <span className="shrink-0 tabular-nums">
+                      {formatMoney(renewal.annual_value)}
+                    </span>
+                    <time
+                      dateTime={renewal.renews_on}
+                      className={cn(
+                        'shrink-0 text-xs text-muted-foreground',
+                        overdue && 'font-medium text-destructive',
+                      )}
+                    >
+                      {overdue ? 'Overdue · ' : ''}
+                      {formatDay(renewal.renews_on)}
+                    </time>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
         </section>
 
         <section aria-labelledby="my-tasks-heading" className="flex flex-col gap-3">
