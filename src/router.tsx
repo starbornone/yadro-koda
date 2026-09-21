@@ -17,12 +17,19 @@ import {
   getCustomerRecord,
   getStageSummary,
   isCustomerStage,
+  listContacts,
   listMyOpenTasks,
   listRecentActivities,
   listUpcomingRenewals,
   type CustomerStage,
 } from '@/lib/supabase/crm'
 import { getInvitation, listInvitations } from '@/lib/supabase/invitations'
+import {
+  getProposal,
+  getProposalById,
+  listPriceBookItems,
+  listProposals,
+} from '@/lib/supabase/proposals'
 import { getMyMemberships, listMembers } from '@/lib/supabase/organisations'
 import {
   getMyPlatformRole,
@@ -168,6 +175,27 @@ const inviteRoute = createRoute({
   loader: ({ params }) => getInvitation(params.token),
   head: () => ({ meta: [{ title: 'Invitation' }] }),
   component: lazyRouteComponent(() => import('./pages/invite-page'), 'InvitePage'),
+})
+
+// The landing page for a proposal link: the same shape as an invitation. Signed out, it shows
+// the offer and which address to sign in with; signed in with that address, it offers to
+// accept or decline. Both are buttons, never a side effect of loading.
+const proposalRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/proposal/$token',
+  beforeLoad: async () => {
+    await authStore.ready()
+    const auth = authStore.getSnapshot()
+
+    if (auth.status === 'signed-in' && auth.passwordRecovery) {
+      throw redirect({ to: '/reset-password' })
+    }
+
+    return { user: auth.status === 'signed-in' ? auth.user : null }
+  },
+  loader: ({ params }) => getProposal(params.token),
+  head: ({ loaderData }) => ({ meta: [{ title: loaderData?.title ?? 'Proposal' }] }),
+  component: lazyRouteComponent(() => import('./pages/proposal-page'), 'ProposalPage'),
 })
 
 // ---------------------------------------------------------------------------
@@ -421,14 +449,15 @@ const staffOrganisationRoute = createRoute({
   path: '/staff/organisations/$orgId',
   loader: async ({ params, parentMatchPromise }) => {
     await guardedBy(parentMatchPromise)
-    const [organisation, record, staff, invitations] = await Promise.all([
+    const [organisation, record, staff, invitations, proposals] = await Promise.all([
       getOrganisation(params.orgId),
       getCustomerRecord(params.orgId),
       listPlatformMembers(),
       listInvitations(params.orgId),
+      listProposals(params.orgId),
     ])
     if (!organisation || !record) throw notFound()
-    return { organisation, ...record, staff, invitations }
+    return { organisation, ...record, staff, invitations, proposals }
   },
   head: ({ loaderData }) => ({
     meta: [{ title: loaderData?.organisation.name ?? 'Organisation' }],
@@ -436,6 +465,45 @@ const staffOrganisationRoute = createRoute({
   component: lazyRouteComponent(
     () => import('./pages/staff/staff-organisation-page'),
     'StaffOrganisationPage',
+  ),
+})
+
+// One proposal, with what its editor needs: the organisation, its contacts (to address it)
+// and the live price book (to price it). The proposal must belong to the organisation in the
+// URL, or the page is a wrong door.
+const staffProposalRoute = createRoute({
+  getParentRoute: () => staffRoute,
+  path: '/staff/organisations/$orgId/proposals/$proposalId',
+  loader: async ({ params, parentMatchPromise }) => {
+    await guardedBy(parentMatchPromise)
+    const [organisation, proposal, contacts, priceBook] = await Promise.all([
+      getOrganisation(params.orgId),
+      getProposalById(params.proposalId),
+      listContacts(params.orgId),
+      listPriceBookItems({ activeOnly: true }),
+    ])
+    if (!organisation || !proposal || proposal.org_id !== organisation.id) throw notFound()
+    return { organisation, proposal, contacts, priceBook }
+  },
+  head: ({ loaderData }) => ({ meta: [{ title: loaderData?.proposal.title ?? 'Proposal' }] }),
+  component: lazyRouteComponent(
+    () => import('./pages/staff/staff-proposal-page'),
+    'StaffProposalPage',
+  ),
+})
+
+// The price book: read by every staff tier, maintained by the tiers that move the pipeline.
+const staffPriceBookRoute = createRoute({
+  getParentRoute: () => staffRoute,
+  path: '/staff/price-book',
+  loader: async ({ parentMatchPromise }) => {
+    await guardedBy(parentMatchPromise)
+    return listPriceBookItems()
+  },
+  head: () => ({ meta: [{ title: 'Price book' }] }),
+  component: lazyRouteComponent(
+    () => import('./pages/staff/staff-price-book-page'),
+    'StaffPriceBookPage',
   ),
 })
 
@@ -469,6 +537,7 @@ const routeTree = rootRoute.addChildren([
   signUpRoute,
   resetPasswordRoute,
   inviteRoute,
+  proposalRoute,
   authenticatedRoute.addChildren([
     accountsRoute,
     onboardingRoute,
@@ -484,6 +553,8 @@ const routeTree = rootRoute.addChildren([
       staffOrganisationsRoute,
       staffNewOrganisationRoute,
       staffOrganisationRoute,
+      staffProposalRoute,
+      staffPriceBookRoute,
       staffTeamRoute,
       staffProfileRoute,
     ]),

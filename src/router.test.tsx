@@ -28,6 +28,7 @@ vi.mock('./pages/onboarding-page', () => ({ OnboardingPage: () => <div>onboardin
 vi.mock('./pages/org-settings-page', () => ({ OrgSettingsPage: () => <div>settings page</div> }))
 vi.mock('./pages/members-page', () => ({ MembersPage: () => <div>members page</div> }))
 vi.mock('./pages/invite-page', () => ({ InvitePage: () => <div>invite page</div> }))
+vi.mock('./pages/proposal-page', () => ({ ProposalPage: () => <div>proposal page</div> }))
 vi.mock('./pages/new-organisation-page', () => ({
   NewOrganisationPage: () => <div>new org page</div>,
 }))
@@ -42,6 +43,12 @@ vi.mock('./pages/staff/staff-organisation-page', () => ({
   StaffOrganisationPage: () => <div>staff organisation</div>,
 }))
 vi.mock('./pages/staff/staff-team-page', () => ({ StaffTeamPage: () => <div>staff team</div> }))
+vi.mock('./pages/staff/staff-proposal-page', () => ({
+  StaffProposalPage: () => <div>staff proposal</div>,
+}))
+vi.mock('./pages/staff/staff-price-book-page', () => ({
+  StaffPriceBookPage: () => <div>staff price book</div>,
+}))
 vi.mock('./pages/staff/staff-new-organisation-page', () => ({
   StaffNewOrganisationPage: () => <div>staff new organisation</div>,
 }))
@@ -91,6 +98,7 @@ vi.mock('@/lib/supabase/platform', () => platform)
 
 const crm = vi.hoisted(() => ({
   getCustomerRecord: vi.fn(),
+  listContacts: vi.fn(),
   getStageSummary: vi.fn(),
   listUpcomingRenewals: vi.fn(),
   listMyOpenTasks: vi.fn(),
@@ -99,6 +107,17 @@ const crm = vi.hoisted(() => ({
 vi.mock('@/lib/supabase/crm', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/supabase/crm')>()),
   ...crm,
+}))
+
+const proposals = vi.hoisted(() => ({
+  getProposal: vi.fn(),
+  getProposalById: vi.fn(),
+  listPriceBookItems: vi.fn(),
+  listProposals: vi.fn(),
+}))
+vi.mock('@/lib/supabase/proposals', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/supabase/proposals')>()),
+  ...proposals,
 }))
 
 const membership = (orgId: string, role = 'owner') => ({
@@ -143,6 +162,11 @@ beforeEach(() => {
   crm.getStageSummary.mockReset().mockResolvedValue({})
   crm.listUpcomingRenewals.mockReset().mockResolvedValue([])
   crm.listMyOpenTasks.mockReset().mockResolvedValue([])
+  crm.listContacts.mockReset().mockResolvedValue([])
+  proposals.getProposal.mockReset().mockResolvedValue(null)
+  proposals.getProposalById.mockReset().mockResolvedValue(null)
+  proposals.listPriceBookItems.mockReset().mockResolvedValue([])
+  proposals.listProposals.mockReset().mockResolvedValue([])
   crm.listRecentActivities.mockReset().mockResolvedValue([])
 })
 
@@ -497,6 +521,35 @@ describe('staff', () => {
     expect(await screen.findByText('staff organisation')).toBeInTheDocument()
     expect(platform.listPlatformMembers).toHaveBeenCalled()
     expect(invitations.listInvitations).toHaveBeenCalledWith('org-1')
+    expect(proposals.listProposals).toHaveBeenCalledWith('org-1')
+  })
+
+  it('serves a proposal with its organisation, contacts and the live price book', async () => {
+    platform.getMyPlatformRole.mockResolvedValue('support')
+    platform.getOrganisation.mockResolvedValue({ id: 'org-1', name: 'Acme', members: [] })
+    proposals.getProposalById.mockResolvedValue({ id: 'prop-1', org_id: 'org-1', title: 'Deal' })
+    renderAt('/staff/organisations/org-1/proposals/prop-1')
+
+    expect(await screen.findByText('staff proposal')).toBeInTheDocument()
+    expect(crm.listContacts).toHaveBeenCalledWith('org-1')
+    expect(proposals.listPriceBookItems).toHaveBeenCalledWith({ activeOnly: true })
+  })
+
+  it('treats a proposal under the wrong organisation as missing', async () => {
+    platform.getMyPlatformRole.mockResolvedValue('support')
+    platform.getOrganisation.mockResolvedValue({ id: 'org-1', name: 'Acme', members: [] })
+    proposals.getProposalById.mockResolvedValue({ id: 'prop-1', org_id: 'org-9', title: 'Deal' })
+    renderAt('/staff/organisations/org-1/proposals/prop-1')
+
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
+  })
+
+  it('serves the price book to every staff tier', async () => {
+    platform.getMyPlatformRole.mockResolvedValue('support')
+    renderAt('/staff/price-book')
+
+    expect(await screen.findByText('staff price book')).toBeInTheDocument()
+    expect(proposals.listPriceBookItems).toHaveBeenCalledWith()
   })
 
   it('loads team invitations for the tiers that manage the team', async () => {
@@ -536,6 +589,25 @@ describe('staff', () => {
     const support = renderAt('/staff/organisations/new')
     expect(await screen.findByText('staff organisations')).toBeInTheDocument()
     expect(support.state.location.pathname).toBe('/staff/organisations')
+  })
+})
+
+describe('proposal links', () => {
+  it('opens for a signed-out visitor and loads the proposal behind the token', async () => {
+    fakeStore.set(signedOut)
+    const router = renderAt('/proposal/0f4b9a1e-2c3d-4e5f-8a6b-7c8d9e0f1a2b')
+
+    expect(await screen.findByText('proposal page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/proposal/0f4b9a1e-2c3d-4e5f-8a6b-7c8d9e0f1a2b')
+    expect(proposals.getProposal).toHaveBeenCalledWith('0f4b9a1e-2c3d-4e5f-8a6b-7c8d9e0f1a2b')
+  })
+
+  it('sends a recovery session to the reset page first', async () => {
+    fakeStore.set(inRecovery)
+    const router = renderAt('/proposal/0f4b9a1e-2c3d-4e5f-8a6b-7c8d9e0f1a2b')
+
+    expect(await screen.findByText('reset page')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/reset-password')
   })
 })
 
