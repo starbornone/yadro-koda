@@ -439,6 +439,45 @@ export type Database = {
           },
         ]
       }
+      price_book_items: {
+        Row: {
+          active: boolean
+          code: string
+          created_at: string
+          description: string | null
+          id: string
+          kind: Database['public']['Enums']['price_book_kind']
+          name: string
+          position: number
+          unit_amount: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          code: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          kind: Database['public']['Enums']['price_book_kind']
+          name: string
+          position?: number
+          unit_amount: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          code?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          kind?: Database['public']['Enums']['price_book_kind']
+          name?: string
+          position?: number
+          unit_amount?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           active_org_id: string | null
@@ -482,6 +521,171 @@ export type Database = {
             columns: ['active_org_id']
             isOneToOne: false
             referencedRelation: 'organisations'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      proposal_lines: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          kind: Database['public']['Enums']['price_book_kind']
+          position: number
+          price_book_item_id: string | null
+          proposal_id: string
+          quantity: number
+          unit_amount: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          kind: Database['public']['Enums']['price_book_kind']
+          position?: number
+          price_book_item_id?: string | null
+          proposal_id: string
+          quantity?: number
+          unit_amount: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          kind?: Database['public']['Enums']['price_book_kind']
+          position?: number
+          price_book_item_id?: string | null
+          proposal_id?: string
+          quantity?: number
+          unit_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'proposal_lines_price_book_item_id_fkey'
+            columns: ['price_book_item_id']
+            isOneToOne: false
+            referencedRelation: 'price_book_items'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'proposal_lines_proposal_id_fkey'
+            columns: ['proposal_id']
+            isOneToOne: false
+            referencedRelation: 'proposals'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      proposals: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          accepted_from: string | null
+          annual_amount: number
+          contact_id: string | null
+          created_at: string
+          created_by: string | null
+          declined_at: string | null
+          declined_reason: string | null
+          email: string
+          expires_at: string | null
+          id: string
+          notes: string | null
+          org_id: string
+          sent_at: string | null
+          sent_by: string | null
+          status: Database['public']['Enums']['proposal_status']
+          title: string
+          token: string
+          total_amount: number
+          updated_at: string
+          withdrawn_at: string | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          accepted_from?: string | null
+          annual_amount?: number
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          declined_at?: string | null
+          declined_reason?: string | null
+          email: string
+          expires_at?: string | null
+          id?: string
+          notes?: string | null
+          org_id: string
+          sent_at?: string | null
+          sent_by?: string | null
+          status?: Database['public']['Enums']['proposal_status']
+          title: string
+          token?: string
+          total_amount?: number
+          updated_at?: string
+          withdrawn_at?: string | null
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          accepted_from?: string | null
+          annual_amount?: number
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          declined_at?: string | null
+          declined_reason?: string | null
+          email?: string
+          expires_at?: string | null
+          id?: string
+          notes?: string | null
+          org_id?: string
+          sent_at?: string | null
+          sent_by?: string | null
+          status?: Database['public']['Enums']['proposal_status']
+          title?: string
+          token?: string
+          total_amount?: number
+          updated_at?: string
+          withdrawn_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'proposals_accepted_by_fkey'
+            columns: ['accepted_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'proposals_contact_id_fkey'
+            columns: ['contact_id']
+            isOneToOne: false
+            referencedRelation: 'contacts'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'proposals_created_by_fkey'
+            columns: ['created_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'proposals_org_id_fkey'
+            columns: ['org_id']
+            isOneToOne: false
+            referencedRelation: 'organisations'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'proposals_sent_by_fkey'
+            columns: ['sent_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
             referencedColumns: ['id']
           },
         ]
@@ -573,6 +777,23 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      accept_proposal: {
+        Args: { accepted_from?: string; token: string }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          slug: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: '*'
+          to: 'organisations'
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       accept_platform_invitation: { Args: { token: string }; Returns: undefined }
       auth_providers_array: { Args: { app_metadata: Json }; Returns: string[] }
       backfill_profiles: { Args: Record<PropertyKey, never>; Returns: number }
@@ -615,6 +836,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      decline_proposal: { Args: { reason?: string; token: string }; Returns: undefined }
       get_invitation: {
         Args: { token: string }
         Returns: {
@@ -626,6 +848,24 @@ export type Database = {
           kind: string
           organisation_name: string
           role: string
+        }[]
+      }
+      get_proposal: {
+        Args: { token: string }
+        Returns: {
+          accepted_at: string
+          annual_amount: number
+          declined_at: string
+          email: string
+          expires_at: string
+          lines: Json
+          notes: string
+          organisation_name: string
+          sent_at: string
+          sent_by_name: string
+          status: Database['public']['Enums']['proposal_status']
+          title: string
+          total_amount: number
         }[]
       }
       has_org_role: {
@@ -646,6 +886,40 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Database['public']['Enums']['platform_role']
       }
+      proposal_is_draft: { Args: { target_proposal: string }; Returns: boolean }
+      send_proposal: {
+        Args: { proposal_id: string; valid_until?: string }
+        Returns: {
+          accepted_at: string | null
+          accepted_by: string | null
+          accepted_from: string | null
+          annual_amount: number
+          contact_id: string | null
+          created_at: string
+          created_by: string | null
+          declined_at: string | null
+          declined_reason: string | null
+          email: string
+          expires_at: string | null
+          id: string
+          notes: string | null
+          org_id: string
+          sent_at: string | null
+          sent_by: string | null
+          status: Database['public']['Enums']['proposal_status']
+          title: string
+          token: string
+          total_amount: number
+          updated_at: string
+          withdrawn_at: string | null
+        }
+        SetofOptions: {
+          from: '*'
+          to: 'proposals'
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       shares_org_with: { Args: { target_user: string }; Returns: boolean }
       slug_from_name: { Args: { name: string }; Returns: string }
       submit_enquiry: {
@@ -660,12 +934,55 @@ export type Database = {
         }
         Returns: undefined
       }
+      withdraw_proposal: {
+        Args: { proposal_id: string }
+        Returns: {
+          accepted_at: string | null
+          accepted_by: string | null
+          accepted_from: string | null
+          annual_amount: number
+          contact_id: string | null
+          created_at: string
+          created_by: string | null
+          declined_at: string | null
+          declined_reason: string | null
+          email: string
+          expires_at: string | null
+          id: string
+          notes: string | null
+          org_id: string
+          sent_at: string | null
+          sent_by: string | null
+          status: Database['public']['Enums']['proposal_status']
+          title: string
+          token: string
+          total_amount: number
+          updated_at: string
+          withdrawn_at: string | null
+        }
+        SetofOptions: {
+          from: '*'
+          to: 'proposals'
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
-      activity_kind: 'note' | 'call' | 'email' | 'meeting' | 'stage_change' | 'joined' | 'enquiry'
+      activity_kind:
+        | 'note'
+        | 'call'
+        | 'email'
+        | 'meeting'
+        | 'stage_change'
+        | 'joined'
+        | 'enquiry'
+        | 'proposal'
       customer_stage: 'lead' | 'qualified' | 'trial' | 'active' | 'churned' | 'lost'
       org_role: 'owner' | 'admin' | 'member'
       platform_role: 'superadmin' | 'admin' | 'support'
+      price_book_kind: 'one_off' | 'monthly' | 'annual'
+      proposal_status: 'draft' | 'sent' | 'accepted' | 'declined' | 'withdrawn'
     }
     CompositeTypes: {
       [_ in never]: never
@@ -781,10 +1098,21 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      activity_kind: ['note', 'call', 'email', 'meeting', 'stage_change', 'joined', 'enquiry'],
+      activity_kind: [
+        'note',
+        'call',
+        'email',
+        'meeting',
+        'stage_change',
+        'joined',
+        'enquiry',
+        'proposal',
+      ],
       customer_stage: ['lead', 'qualified', 'trial', 'active', 'churned', 'lost'],
       org_role: ['owner', 'admin', 'member'],
       platform_role: ['superadmin', 'admin', 'support'],
+      price_book_kind: ['one_off', 'monthly', 'annual'],
+      proposal_status: ['draft', 'sent', 'accepted', 'declined', 'withdrawn'],
     },
   },
 } as const

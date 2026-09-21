@@ -26,8 +26,8 @@ export const isCustomerStage = (value: unknown): value is CustomerStage =>
   typeof value === 'string' && (CUSTOMER_STAGES as readonly string[]).includes(value)
 
 /**
- * Mirrors the `activity_kind` enum. `stage_change`, `joined` and `enquiry` rows are written by
- * the database.
+ * Mirrors the `activity_kind` enum. `stage_change`, `joined`, `enquiry` and `proposal` rows
+ * are written by the database.
  */
 export type ActivityKind =
   | 'note'
@@ -37,9 +37,10 @@ export type ActivityKind =
   | 'stage_change'
   | 'joined'
   | 'enquiry'
+  | 'proposal'
 
 /** What the database records on its own; clients cannot log these. */
-export type SystemActivityKind = 'stage_change' | 'joined' | 'enquiry'
+export type SystemActivityKind = 'stage_change' | 'joined' | 'enquiry' | 'proposal'
 
 /** One value in `customers.details`: what a product-defined field holds. */
 export type DetailValue = string | number | boolean | string[]

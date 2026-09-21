@@ -17,7 +17,7 @@ export const useStaffOrganisationPage = () => {
   const navigate = useNavigate()
   const { user } = authenticatedRoute.useRouteContext()
   const { platformRole } = staffRoute.useLoaderData()
-  const { organisation, customer, contacts, activities, tasks, staff, invitations } =
+  const { organisation, customer, contacts, activities, tasks, staff, invitations, proposals } =
     route.useLoaderData()
   const [name, setName] = useState(organisation.name)
   const [isSaving, setIsSaving] = useState(false)
@@ -68,6 +68,7 @@ export const useStaffOrganisationPage = () => {
     tasks,
     staff,
     invitations,
+    proposals,
     currentUserId: user.id,
     canRename: canManageOrganisation,
     canDelete: canManageOrganisation,
