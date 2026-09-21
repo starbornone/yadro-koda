@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Activity, Contact, Customer, Task } from '@/lib/supabase/crm'
 import type { Invitation } from '@/lib/supabase/invitations'
+import type { Proposal } from '@/lib/supabase/proposals'
 import { formatDate, formatDay } from '@/lib/format'
 import type { OrganisationDetail, PlatformMember } from '@/lib/supabase/platform'
 import { renderStaff } from '@/test/render-authenticated'
@@ -46,10 +47,17 @@ vi.mock('@/lib/supabase/crm', async (importOriginal) => ({
   ...crm,
 }))
 
+const proposalsApi = vi.hoisted(() => ({ createProposal: vi.fn() }))
+vi.mock('@/lib/supabase/proposals', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/supabase/proposals')>()),
+  ...proposalsApi,
+}))
+
 beforeEach(() => {
   for (const fn of Object.values(organisations)) fn.mockReset().mockResolvedValue(undefined)
   for (const fn of Object.values(invitationsApi)) fn.mockReset().mockResolvedValue(undefined)
   for (const fn of Object.values(crm)) fn.mockReset().mockResolvedValue(undefined)
+  proposalsApi.createProposal.mockReset().mockResolvedValue({ id: 'prop-9' })
 })
 
 const organisation: OrganisationDetail = {
@@ -225,7 +233,41 @@ const invitations: Invitation[] = [
   },
 ]
 
-const record = { organisation, customer, contacts, activities, tasks, staff, invitations }
+const proposals: Proposal[] = [
+  {
+    id: 'prop-1',
+    org_id: 'org-1',
+    contact_id: 'contact-1',
+    email: 'grace@acme.test',
+    title: 'Verification pathway',
+    notes: null,
+    status: 'sent',
+    token: '0f4b9a1e-2c3d-4e5f-8a6b-7c8d9e0f1a2c',
+    total_amount: 5500,
+    annual_amount: 5000,
+    expires_at: '2999-01-01T00:00:00Z',
+    sent_at: '2026-09-01T00:00:00Z',
+    accepted_at: null,
+    accepted_by: null,
+    accepted_from: null,
+    declined_at: null,
+    declined_reason: null,
+    withdrawn_at: null,
+    created_at: '2026-09-01T00:00:00Z',
+    lines: [],
+  },
+]
+
+const record = {
+  organisation,
+  customer,
+  contacts,
+  activities,
+  tasks,
+  staff,
+  invitations,
+  proposals,
+}
 
 const renderPage = (platformRole: 'superadmin' | 'admin' | 'support', loaderData = record) =>
   renderStaff(<StaffOrganisationPage />, {
@@ -490,6 +532,64 @@ describe('StaffOrganisationPage', () => {
 
     expect(await screen.findByText(/row-level security/)).toBeInTheDocument()
     expect(screen.getByLabelText('What happened')).toHaveValue('x')
+  })
+})
+
+describe('StaffOrganisationPage proposals', () => {
+  it('lists proposals with their state and totals, and a link to hand over', async () => {
+    renderPage('support')
+
+    const section = within(await screen.findByRole('region', { name: 'Proposals' }))
+    const row = section.getByRole('link', { name: 'Verification pathway' }).closest('tr')
+    expect(section.getByRole('link', { name: 'Verification pathway' })).toHaveAttribute(
+      'href',
+      '/staff/organisations/org-1/proposals/prop-1',
+    )
+    expect(row).toHaveTextContent('Sent')
+    expect(row).toHaveTextContent(/5,500/)
+    expect(row).toHaveTextContent(/5,000/)
+    expect(
+      section.getByRole('button', { name: 'Copy link for Verification pathway' }),
+    ).toBeInTheDocument()
+    // Support does not draft.
+    expect(section.queryByRole('button', { name: /New proposal/ })).not.toBeInTheDocument()
+  })
+
+  it('starts a draft addressed to the primary contact and opens it', async () => {
+    const user = userEvent.setup()
+    const { router } = renderPage('admin')
+
+    const section = within(await screen.findByRole('region', { name: 'Proposals' }))
+    await user.click(section.getByRole('button', { name: /New proposal/ }))
+    expect(screen.getByLabelText('Title')).toHaveValue('Proposal for Acme')
+    expect(screen.getByLabelText('Send to')).toHaveValue('contact-1')
+    await user.click(screen.getByRole('button', { name: 'Create draft' }))
+
+    expect(proposalsApi.createProposal).toHaveBeenCalledWith('org-1', {
+      title: 'Proposal for Acme',
+      email: 'grace@acme.test',
+      contact_id: 'contact-1',
+    })
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe('/staff/organisations/org-1/proposals/prop-9'),
+    )
+  })
+
+  it('takes another address when no contact fits', async () => {
+    const user = userEvent.setup()
+    renderPage('admin')
+
+    const section = within(await screen.findByRole('region', { name: 'Proposals' }))
+    await user.click(section.getByRole('button', { name: /New proposal/ }))
+    await user.selectOptions(screen.getByLabelText('Send to'), '__other__')
+    await user.type(screen.getByLabelText('Email'), 'bill@acme.test')
+    await user.click(screen.getByRole('button', { name: 'Create draft' }))
+
+    expect(proposalsApi.createProposal).toHaveBeenCalledWith('org-1', {
+      title: 'Proposal for Acme',
+      email: 'bill@acme.test',
+      contact_id: null,
+    })
   })
 })
 

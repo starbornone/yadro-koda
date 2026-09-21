@@ -13,6 +13,7 @@ import { StageBadge } from '@/features/crm/components/stage-badge'
 import { TasksSection } from '@/features/crm/components/tasks-section'
 import { DeleteOrganisationSection } from '@/features/organisations/components/delete-organisation-section'
 import { MembersSection } from '@/features/organisations/components/members-section'
+import { ProposalsSection } from '@/features/proposals/components/proposals-section'
 import { useStaffOrganisationPage } from '@/features/staff/hooks/use-staff-organisation-page'
 import { personName } from '@/lib/auth/display-user'
 import { ORG_ROLE_LABELS } from '@/lib/auth/permissions'
@@ -21,8 +22,8 @@ import { createInvitation, revokeInvitation } from '@/lib/supabase/invitations'
 
 /**
  * The customer record: one organisation as staff see it — where it sits in the pipeline, what
- * the product records about it, who to talk to, what has happened, what is next, who its
- * members are and who has been invited.
+ * the product records about it, what has been proposed, who to talk to, what has happened,
+ * what is next, who its members are and who has been invited.
  */
 export const StaffOrganisationPage = () => {
   const {
@@ -33,6 +34,7 @@ export const StaffOrganisationPage = () => {
     tasks,
     staff,
     invitations,
+    proposals,
     currentUserId,
     canRename,
     canDelete,
@@ -84,6 +86,13 @@ export const StaffOrganisationPage = () => {
         </section>
 
         <DetailsSection customer={customer} canManage={canManageCustomers} />
+
+        <ProposalsSection
+          organisation={organisation}
+          proposals={proposals}
+          contacts={contacts}
+          canManage={canManageCustomers}
+        />
 
         <ContactsSection
           orgId={organisation.id}
