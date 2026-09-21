@@ -89,6 +89,7 @@ src/
                         # and the settings / members / invite page hooks
     staff/              # Staff team and organisation page hooks
     crm/                # Customer record sections (pipeline, contacts, activity, tasks), stages
+    proposals/          # Proposals section, editor and public-page hooks, lines table, labels
     accounts/           # Account chooser hook
     marketing/          # Placeholder copy for the public site (content.ts) and the lead form hook
     profile/            # Profile, change-password and account sections + page hook
@@ -127,6 +128,7 @@ Path alias: `@/` → `src/`.
 | `/signup`                | signed out           | Create account; signed in → /accounts                           |
 | `/reset-password`        | from the email link  | Set a new password, or request a fresh link                     |
 | `/invite/$token`         | from the invite link | What the invitation is; sign in, sign up or accept              |
+| `/proposal/$token`       | from the sent link   | The offer; sign in with the addressed email to accept / decline |
 | `/accounts`              | signed in            | Choose where to go: staff area or an organisation               |
 | `/onboarding`            | signed in, no org    | Create your first organisation                                  |
 | `/app`                   | signed in + member   | Dashboard, inside the active organisation                       |
@@ -136,7 +138,9 @@ Path alias: `@/` → `src/`.
 | `/app/profile`           | signed in + member   | Profile, password, account, sign-out                            |
 | `/staff`                 | staff                | Overview: counts, pipeline by stage, your tasks, latest entries |
 | `/staff/organisations`   | staff                | Every organisation (`?q=`, `?stage=`); `new` for leads          |
-| `/staff/organisations/…` | staff                | Customer record: pipeline, contacts, tasks, members             |
+| `/staff/organisations/…` | staff                | Customer record: pipeline, proposals, contacts, tasks, members  |
+| `…/proposals/$id`        | staff                | One proposal: price and send a draft; hand over or withdraw     |
+| `/staff/price-book`      | staff                | What can be sold; admins and up maintain it                     |
 | `/staff/team`            | staff                | Platform members; admins and up invite, change, remove          |
 | `/staff/profile`         | staff                | The profile page, inside the staff shell                        |
 
@@ -290,9 +294,24 @@ email address a day (a double-click makes one lead), and a loud limit of twenty 
 one IP address, counted in the private `enquiry_attempts` table from the address the gateway
 reports.
 
+**Proposals close the deal.** Staff price one from the **price book** (`/staff/price-book`:
+the product's plans and add-ons, each a `one_off`, `monthly` or `annual` unit price — rows are
+product data, entered by staff), address it to an email (usually a contact's), and send it. The
+database freezes it, keeps its totals (`total_amount`, and `annual_amount` — annual lines once,
+monthly ones twelve times) and gives it a link on the invitation pattern: `get_proposal()`
+shows the offer to whoever holds the link, signed in or not; `accept_proposal()` needs a session
+with the addressed email and, atomically, marks the proposal accepted (who, when, and what the
+browser said about itself — the signature), makes the caller the organisation's **owner**
+(existing members keep their role), moves the customer to `active` with the proposal's plan and
+annual value and a renewal a year out, and logs it. `decline_proposal()` records the answer and
+a reason and leaves the stage to staff. One proposal can be out per organisation at a time;
+`withdraw_proposal()` takes it back, keeping the row. Nothing is emailed (roadmap #4 — until
+then the link is passed on by hand, like an invitation). Data access is in
+`src/lib/supabase/proposals.ts`; the schema is `supabase/schemas/35_proposals.sql`.
+
 Every staff tier reads all of it and logs activity; moving the pipeline (stage, owner, source,
-new leads) needs `platform:manage-customers` — superadmin and admin — enforced in SQL by
-`platform_can_manage_customers()`. Removing someone else's contact, entry or task also needs it.
+new leads, the price book, proposals) needs `platform:manage-customers` — superadmin and admin —
+enforced in SQL by `platform_can_manage_customers()`. Removing someone else's contact, entry or task also needs it.
 Inviting a lead's first user, or changing who belongs to a tenant, is writing tenant data and so
 needs `platform:manage-organisations` (superadmin; `platform_can_manage_org()` in SQL) — the
 customer record shows the same members and invitations sections as the tenant's own page.

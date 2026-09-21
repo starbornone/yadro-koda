@@ -1,7 +1,7 @@
 ---
 title: Roadmap
 status: current
-updated: 2026-09-20
+updated: 2026-09-22
 ---
 
 # Roadmap
@@ -12,21 +12,22 @@ it sits on. When something ships it moves to _Done_ with its date.
 
 ## Next
 
-1. **Proposals** — a price book, `proposals` with line items and totals, an email-bound token
-   link on the invitation pattern, `get_proposal()` for the signed-out preview and
-   `accept_proposal()` from a session with that email. Acceptance creates the owner membership,
-   moves the stage to won and records who, when and from where. _OVI gap #3._
-2. **Onboarding playbooks** — per-stage task templates created by trigger on the stage change,
+1. **Onboarding playbooks** — per-stage task templates created by trigger on the stage change,
    due relative to it, assigned to the customer's owner. _OVI gap #5._
-3. **Viewer role and access log** — a read-only `viewer` in `org_role`, invitable and
+2. **Viewer role and access log** — a read-only `viewer` in `org_role`, invitable and
    time-boxed like any member; sign-ins to an organisation recorded so an auditor's visit is
    logged. _OVI gap #6._
-4. **Invitation email delivery** — a database webhook on insert → Edge Function → provider, with
-   custom SMTP on an Australian provider so nothing customer-facing leaves the country. Until
-   then invitations stay hand-off links. _OVI gap #7._
-5. **Expiry housekeeping** — a nightly `pg_cron` purge of invitations past their link expiry,
-   memberships past their access end, and `enquiry_attempts` older than a day. Correctness is
-   already fine; this keeps tables honest.
+3. **Invitation and proposal email delivery** — a database webhook on insert / send → Edge
+   Function → provider, with custom SMTP on an Australian provider so nothing customer-facing
+   leaves the country. The same function can record the accepting client's address
+   server-side (today `proposals.accepted_from` is what the browser reports). Until then both
+   stay hand-off links. _OVI gap #7._
+4. **Expiry housekeeping** — a nightly `pg_cron` purge of invitations past their link expiry,
+   memberships past their access end, and `enquiry_attempts` older than a day; sent proposals
+   past their validity could be marked expired here too (the app already treats them so).
+   Correctness is already fine; this keeps tables honest.
+5. **Proposal documents** — a print stylesheet or PDF of an accepted proposal for the customer's
+   records. The accepted row is the record; this is a courtesy copy. Deferred until asked for.
 6. **Dashboard content** — `/app` is the product's slot; leave the placeholder until OVI's
    compliance dashboard replaces it.
 7. **Sites under an organisation** — for multi-site enterprise providers. Deferred until a
@@ -34,6 +35,12 @@ it sits on. When something ships it moves to _Done_ with its date.
 
 ## Done
 
+- 2026-09-22 — **Proposals**: the price book (`/staff/price-book`), proposals with lines and
+  database-kept totals on the customer record, `send_proposal()` / `withdraw_proposal()`, the
+  public `/proposal/:token` page on the invitation pattern with `get_proposal()`,
+  `accept_proposal()` (owner membership, customer won with plan, annual value and renewal,
+  signature of who / when / from where) and `decline_proposal()`; every step on the timeline as
+  a `proposal` entry. _OVI gap #3._
 - 2026-09-20 — **Value and dates**: plan, annual value, expected close, renewal and outcome
   reason on the customer; `stage_changed_at` and `won_at` by trigger; pipeline value, ARR and
   renewals on the overview; the stage-rename recipe in the README. _OVI gap #4; #10 in part._
