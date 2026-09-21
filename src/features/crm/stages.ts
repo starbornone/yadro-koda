@@ -27,6 +27,7 @@ export const ACTIVITY_KIND_LABELS: Record<ActivityKind, string> = {
   stage_change: 'Stage change',
   joined: 'Joined',
   enquiry: 'Enquiry',
+  proposal: 'Proposal',
 }
 
 /** The kinds a person can log; the rest come from the database. */

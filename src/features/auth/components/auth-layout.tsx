@@ -4,8 +4,11 @@ import { GalleryVerticalEnd } from 'lucide-react'
 import { ThemeToggle } from '@/components/theme/theme-toggle'
 import { siteConfig } from '@/config/site'
 
-/** Two-column frame shared by the sign-in and password-reset screens. */
-export function AuthLayout({ children }: { children: ReactNode }) {
+/**
+ * Two-column frame shared by the sign-in and password-reset screens. `wide` gives the content
+ * room for a table (a proposal to read before accepting).
+ */
+export function AuthLayout({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
       <div className="flex flex-col gap-4 p-6 md:p-10">
@@ -19,7 +22,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
           <ThemeToggle />
         </div>
         <div className="flex flex-1 items-center justify-center">
-          <div className="w-full max-w-xs">{children}</div>
+          <div className={wide ? 'w-full max-w-lg' : 'w-full max-w-xs'}>{children}</div>
         </div>
       </div>
       <div className="relative hidden bg-muted lg:block">

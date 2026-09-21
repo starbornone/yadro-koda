@@ -4,6 +4,7 @@ import {
   LayoutDashboardIcon,
   ShieldIcon,
   SquareArrowOutUpRightIcon,
+  TagIcon,
   UsersIcon,
 } from 'lucide-react'
 import { NavMain, type NavMainItem } from '@/components/navigation/nav-main'
@@ -29,6 +30,7 @@ import { staffRoute } from '@/lib/auth/staff-route'
 const navMain: NavMainItem[] = [
   { title: 'Overview', icon: <LayoutDashboardIcon />, to: '/staff' },
   { title: 'Organisations', icon: <Building2Icon />, to: '/staff/organisations', fuzzy: true },
+  { title: 'Price book', icon: <TagIcon />, to: '/staff/price-book' },
   { title: 'Team', icon: <UsersIcon />, to: '/staff/team' },
 ]
 

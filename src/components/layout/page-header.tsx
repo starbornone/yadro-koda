@@ -16,6 +16,8 @@ export type Crumb = {
   label: string
   /** Omit on the last crumb (the current page). */
   to?: LinkProps['to']
+  /** For a `to` with `$params`. */
+  params?: LinkProps['params']
 }
 
 /** Sticky page header for routes inside the app shell: sidebar toggle, breadcrumbs, theme. */
@@ -37,7 +39,9 @@ export function PageHeader({ crumbs }: { crumbs: Crumb[] }) {
                       <BreadcrumbPage className="line-clamp-1">{crumb.label}</BreadcrumbPage>
                     ) : (
                       <BreadcrumbLink asChild>
-                        <Link to={crumb.to}>{crumb.label}</Link>
+                        <Link to={crumb.to} params={crumb.params}>
+                          {crumb.label}
+                        </Link>
                       </BreadcrumbLink>
                     )}
                   </BreadcrumbItem>

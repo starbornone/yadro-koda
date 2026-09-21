@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   ArrowRightLeftIcon,
+  FileSignatureIcon,
   GlobeIcon,
   MailIcon,
   MessageSquareTextIcon,
@@ -23,6 +24,7 @@ const KIND_ICONS: Record<Activity['kind'], typeof MailIcon> = {
   stage_change: ArrowRightLeftIcon,
   joined: UserPlusIcon,
   enquiry: GlobeIcon,
+  proposal: FileSignatureIcon,
 }
 
 /** Who did it: the author, or the website when the visitor did it themselves. */
