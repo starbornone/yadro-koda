@@ -5,10 +5,11 @@ have decided and what comes next. The top-level [README](../README.md) and
 [`supabase/README.md`](../supabase/README.md) describe what is built; this folder describes why
 and what for.
 
-| File                                 | What it holds                                                                                 |
-| ------------------------------------ | --------------------------------------------------------------------------------------------- |
-| [`products/ovi.md`](products/ovi.md) | The first product on the platform: what OVI is, what it needs, where the platform falls short |
-| [`roadmap.md`](roadmap.md)           | The work, ranked, with what is done and what each item is for                                 |
+| File                                                     | What it holds                                                                                                                    |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| [`products/ovi.md`](products/ovi.md)                     | The first product on the platform: what OVI is, what it needs, where the platform falls short                                    |
+| [`products/ovi-direction.md`](products/ovi-direction.md) | Draft: the tenant side as a compliance platform — modules, a generic compliance layer, the limits on customisation, an MVP order |
+| [`roadmap.md`](roadmap.md)                               | The work, ranked, with what is done and what each item is for                                                                    |
 
 ## Conventions
 

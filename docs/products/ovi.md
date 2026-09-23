@@ -13,7 +13,8 @@ OVI's actual sales system — the founding document is explicit that the answer 
 
 Source: [OVI MVP](https://docs.google.com/document/d/1mdWYiEzSvgfdHdo4QsvxP4rwjbdboHxB2IYq92LSXQ0/edit)
 (Google Doc, April–May 2026). This file summarises what bears on the platform; the doc is the
-truth for the product.
+truth for the product. Where the tenant side goes from here — modules and a generic compliance
+layer — is a draft in [ovi-direction.md](ovi-direction.md).
 
 ## The product in brief
 
